@@ -22,6 +22,10 @@ double engineTempF[] = { 302.00,284.00,286.00,248.00,230.00,212.00,194.00,176.00
 
 bool isFirstScan = true;
 char savedAddr;
+union {
+	long val;
+	uint8_t bytes[4];
+} extendedPacketId;
 
 // note: the _in array should have increasing values
 double multiMap(double val, double* _in, double* _out, uint8_t size)
@@ -43,7 +47,34 @@ double multiMap(double val, double* _in, double* _out, uint8_t size)
 }
 
 void onCanRecieved(int size) {
+	//Extended packet
+	if (CAN.packetExtended()) {
+		Serial.print("Extended packet recieved from address:");
+		extendedPacketId.val = CAN.packetId();
+		if (sizeof(extendedPacketId.bytes) == 4) {
+			Serial.println(extendedPacketId.bytes[3]);
+			parseCanExtendedId(extendedPacketId.bytes);
+		}
+	}
 
+
+	while (CAN.available()) {
+		Serial.print((char)CAN.read());
+	}
+}
+
+void parseCanExtendedId(byte* packetIdBytes)
+{
+	Serial.print("Pgn:");
+
+	//If byte 1 is 
+
+	if (sizeof(packetIdBytes) == 4) {
+		unsigned pgn = (pgn << 8) + packetIdBytes[2];
+		pgn = (pgn << 8) + packetIdBytes[1];
+		pgn = (pgn << 8) + packetIdBytes[0];
+		Serial.println(pgn);
+	}
 }
 
 void sendAddressClaim(int addr) {
@@ -52,7 +83,7 @@ void sendAddressClaim(int addr) {
 
 void sendAddressClaimRequest(uint8_t sourceAddr)
 {
-	CAN.beginExtendedPacket(id);
+	CAN.beginExtendedPacket(0x0);
 	CAN.endPacket();
 	delay(1000);//delay while address claims are returned
 
@@ -67,9 +98,9 @@ int getSavedAddr()
 }
 
 void firstScan() {
-	sendAddressClaimRequest();
-	savedAddr = getSavedAddr();
-	if(savedAddr == 0)
+	//sendAddressClaimRequest();
+	//savedAddr = getSavedAddr();
+	//if(savedAddr == 0)
 }
 
 // the setup function runs once when you press reset or power the board
@@ -97,6 +128,7 @@ void setup()
 		lcd.setCursor(1, 0);
 		lcd.print("CAN BUS ONLINE!");
 	}
+	CAN.loopback();
 	CAN.onReceive(onCanRecieved);
 	lcd.clear();
 
@@ -112,27 +144,27 @@ void loop()
 		//CAN.available
 		//sendAddressClaim(getSavedAddr());
 
-		firstScan = false;
+		isFirstScan = false;
 	}
 
 
 	// send packet: id is 11 bits, packet can contain up to 8 bytes of data
-	Serial.print("Sending packet ... ");
+	//Serial.print("Sending packet ... ");
 
-	CAN.beginPacket(0x12);
-	CAN.write('h');
-	CAN.write('e');
-	CAN.write('l');
-	CAN.write('l');
-	CAN.write('o');
-	CAN.endPacket();
+	//CAN.beginPacket(0x12);
+	//CAN.write('h');
+	//CAN.write('e');
+	//CAN.write('l');
+	//CAN.write('l');
+	//CAN.write('o');
+	//CAN.endPacket();
 
-	Serial.println("done");
+	//Serial.println("done");
 
 	// send extended packet: id is 29 bits, packet can contain up to 8 bytes of data
 	Serial.print("Sending extended packet ... ");
 
-	CAN.beginExtendedPacket(0xabcdef);
+	CAN.beginExtendedPacket(0x1F503);
 	CAN.write('w');
 	CAN.write('o');
 	CAN.write('r');
@@ -149,7 +181,7 @@ void loop()
 	double val = 0.00;
 
 	//Coolant temp
-	Serial.println(analogRead(A0));
+	//Serial.println(analogRead(A0));
 	r2 = voltageToResistance(analogRead(A0), vIn, r1);
 	val = multiMap(r2, engineTempSensorResistance, engineTempF,11);
 	//Serial.print("The engine temp is:");
