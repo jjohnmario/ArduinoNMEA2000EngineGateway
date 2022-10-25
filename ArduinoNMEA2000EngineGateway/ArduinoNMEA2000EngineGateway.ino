@@ -76,6 +76,14 @@ void onCanRecieved(int size) {
 void processIsoMsg(Extended_Id extId,byte* data) {
 	Serial.println("Message is ISO-formatted");
 	//Allowed pgns
+	switch (extId.pgn){
+	case 59392://ISO Acknowledge
+		break;
+	case 59904://ISO Request
+		break;
+	case 60928://ISO Address Claim
+		break;
+	}
 }
 
 void processNmea2000Msg(Extended_Id extId, byte* data) {
@@ -201,7 +209,7 @@ void loop()
 	// send extended packet: id is 29 bits, packet can contain up to 8 bytes of data
 	Serial.print("Sending extended packet ... ");
 
-	CAN.beginExtendedPacket(0x18EE0005);
+	CAN.beginExtendedPacket(0x18DA6005);
 	CAN.write('w');
 	CAN.write('o');
 	CAN.write('r');
