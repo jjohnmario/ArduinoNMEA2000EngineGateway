@@ -4,6 +4,7 @@
  Author:	jjohn
 */
 
+#include "CanMessage.h"
 #include <iostream>
 #include <map>
 #include <cstddef>
@@ -11,7 +12,9 @@
 #include "CAN.h"
 #include "LiquidCrystal_I2C.h"
 #include <avr/pgmspace.h> 
-
+unsigned long lastMillis;
+uint32_t recievePgns[]{ 59392 ,59904, 60928 };
+uint32_t transmitPgns[]{0};
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 //VDO,12V,EU,0-10 Bar
 double oilPressSensorResistance[] = { 10.00,31.00,52.00,71.00,90.00,107.00,124.00,140.00,156.00,170.00,184.00 };
@@ -65,32 +68,38 @@ void onCanRecieved(int size) {
 			CAN.readBytes(data, dataLen);
 			for (byte b : data)
 				Serial.print((char)b);
-			if (extId.msgType == 0)
-				processIsoMsg(extId,data);//Message is ISO
-			else
-				processNmea2000Msg(extId,data);//Message is NMEA2000
+			bool isRecievePgn = false;//check if pgn is supported
+			for (int x = 0; x < sizeof(recievePgns); x++) {
+				if (extId.pgn == recievePgns[x]){				
+					isRecievePgn = true;
+					break;
+				}
+			}
+			if (isRecievePgn) {
+				processRecievedMsg(extId, data);//process supported pgn
+			}
 		}
 	}
 }
-
-void processIsoMsg(Extended_Id extId,byte* data) {
-	Serial.println("Message is ISO-formatted");
+void processRecievedMsg(Extended_Id extId, byte* data) {
+	Serial.println("PGN is valid.");
 	//Allowed pgns
-	switch (extId.pgn){
+	switch (extId.pgn) {
 	case 59392://ISO Acknowledge
 		break;
-	case 59904://ISO Request
+	case 59904: {//ISO Request
+
 		break;
+	}
+
 	case 60928://ISO Address Claim
 		break;
 	}
 }
 
-void processNmea2000Msg(Extended_Id extId, byte* data) {
-	Serial.println("Message is NMEA2000-formatted");
+void processPgn59904(Extended_Id extId, byte* data) {
 
 }
-
 
 Extended_Id parseCanExtendedId(byte* idFrame)
 {
@@ -148,6 +157,13 @@ void firstScan() {
 	//if(savedAddr == 0)
 }
 
+void updateLcd(double waterTemp, double oilPress) {
+	lcd.setCursor(1, 0);
+	lcd.print("WATER F:");
+	lcd.print(waterTemp, 0);
+}
+
+
 // the setup function runs once when you press reset or power the board
 void setup() 
 {
@@ -176,12 +192,13 @@ void setup()
 	CAN.loopback();
 	CAN.onReceive(onCanRecieved);
 	lcd.clear();
-
+	analogReadResolution(12);
 }
 
 // the loop function runs over and over again until power down or reset
 void loop()
 {
+
 	//First pass
 	if (isFirstScan) {
 		firstScan();
@@ -207,52 +224,62 @@ void loop()
 	//Serial.println("done");
 
 	// send extended packet: id is 29 bits, packet can contain up to 8 bytes of data
-	Serial.print("Sending extended packet ... ");
+	//Serial.print("Sending extended packet ... ");
 
-	CAN.beginExtendedPacket(0x18DA6005);
-	CAN.write('w');
-	CAN.write('o');
-	CAN.write('r');
-	CAN.write('l');
-	CAN.write('d');
-	CAN.endPacket();
+	//CAN.beginExtendedPacket(0x18DA6005);
+	//CAN.write('w');
+	//CAN.write('o');
+	//CAN.write('r');
+	//CAN.write('l');
+	//CAN.write('d');
+	//CAN.endPacket();
 
-	Serial.println("done");
+	//Serial.println("done");
 
-
-	double vIn = 3.30;
+	double vMin = 0.0;
+	double vMax = 3.3;
 	double r1 = 1000.00;
 	double r2 = 0.00;
 	double val = 0.00;
 
 	//Coolant temp
 	//Serial.println(analogRead(A0));
-	r2 = voltageToResistance(analogRead(A0), vIn, r1);
+	r2 = voltageToResistance(0,4096,analogRead(A0), vMin, vMax, r1);
+	Serial.println(r2);
 	val = multiMap(r2, engineTempSensorResistance, engineTempF,11);
-	//Serial.print("The engine temp is:");
-	//Serial.print(val);
-	//Serial.println("F");
-	lcd.setCursor(1, 0);
-	lcd.print("WATER F:");
-	lcd.print(val);
+	Serial.println(val);
+	Serial.print("The engine temp is:");
+	Serial.print(val,0);
+	Serial.println("F");
+
+	if (millis() - lastMillis >= 2 * 1000UL)
+	{
+		lastMillis = millis();  //get ready for the next iteration
+		updateLcd(val,0);
+	}
 
 	//Oil pressure
-	r2 = voltageToResistance(analogRead(A1), vIn, r1);
-	val = multiMap(r2, oilPressSensorResistance, oilPressBar, 11);
+	//r2 = voltageToResistance(analogRead(A1), vIn, r1);
+	//val = multiMap(r2, oilPressSensorResistance, oilPressBar, 11);
 	//Serial.print("The engine oil pressure is:");
 	//Serial.print(val);
 	//Serial.println("Bar");
-	lcd.setCursor(1, 1);
-	lcd.print("OIL BAR:");
-	lcd.print(val);
+	//lcd.setCursor(1, 1);
+	//lcd.print("OIL BAR:");
+	//lcd.print(val);
 }
 
-double voltageToResistance(int countsIn, double vIn, double r1)
+double voltageToResistance(int countsMin, int countsMax, int countsIn, double vMin, double vMax, double r1)
 {
-	// Convert the analog reading counts (which goes from 0 - 1023) to a voltage (0 - vIn):
-	float vOut = countsIn * (vIn / 1023.0);
+	//0-1024 counts = 0-3.3V
+	// 1 count = 0.00322266V
+	//0.0024390 volts per ohm of resistance
+	// 3.3 volts/
+	// Convert the analog reading counts (which goes from minCounts to 1maxCounts) to a voltage (0 to vIn):
+	float vOut = countsIn * ((vMax-vMin) / (countsMax - countsMin));
+	Serial.println(vOut);
 	// Find the resistance of R2. R2 = Vout*R1/Vin-Vout
-	float r2 = vOut * r1 / (vIn - vOut);
+	float r2 = vOut * r1 / ((vMax-vMin) - vOut);
 	return r2;
 }
 
