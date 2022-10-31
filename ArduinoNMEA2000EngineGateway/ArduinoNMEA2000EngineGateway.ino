@@ -20,8 +20,44 @@ LiquidCrystal_I2C lcd(0x27, 20, 4);  // set the LCD address to 0x27 for a 16 cha
 double oilPressSensorResistance[] = { 10.00,31.00,52.00,71.00,90.00,107.00,124.00,140.00,156.00,170.00,184.00 };
 double oilPressBar[] = { 0.00,1.00,2.00,3.00,4.00,5.00,6.00,7.00,8.00,9.00,10.00 };
 //VDO,12V,US,100 to 250F
-double engineTempSensorResistance[] = { 9.78,14.15,20.46,29.60,35.48,50.61,71.55,99.00,138.22,199.00,295.68,447.15,676.84,1012.74,1487.36,2137.79,3005.63 };
-double engineTempF[] = { 302.00,284.00,286.00,248.00,230.00,212.00,194.00,176.00,158.00,140.00,122.00,104.00,86.00,68.00,50.00,32.00,14.00 };
+double engineTempSensorResistance[] = {
+	9.78,
+	14.15,
+	20.46,
+	29.60,
+	35.48,
+	50.61,
+	71.55,
+	99.00,
+	138.22,
+	199.00,
+	295.68,
+	447.15,
+	676.84,
+	1012.74,
+	1487.36,
+	2137.79,
+	3005.63 
+};
+double engineTempF[] = {
+	302.00,
+	284.00,
+	286.00,
+	248.00,
+	230.00,
+	212.00,
+	194.00,
+	176.00,
+	158.00,
+	140.00,
+	122.00,
+	104.00,
+	86.00,
+	68.00,
+	50.00,
+	32.00,
+	14.00 
+};
 byte NAME[4] = { 0x0,0x0,0x0,0x0 };
 bool isFirstScan = true;
 char savedAddr;
@@ -236,21 +272,28 @@ void loop()
 
 	//Serial.println("done");
 
-	double vMin = 0.0;
-	double vMax = 3.3;
+	double vInMin = 0.0;
+	double vInMax = 3.3;
+	double vIn = 5.0;
 	double r1 = 1000.00;
 	double r2 = 0.00;
 	double val = 0.00;
 
 	//Coolant temp
 	//Serial.println(analogRead(A0));
-	r2 = voltageToResistance(0,4096,analogRead(A0), vMin, vMax, r1);
+	double ref = analogInputToVolts(0, 4096, analogRead(A1), 0, 3.3);
+	vIn = ref * 2;
+	Serial.println(ref);
+	double vOut = analogInputToVolts(0, 4096, analogRead(A0), vInMin, vInMax);
+	r2 = voltageToR2(vIn, vOut, r1);
 	Serial.println(r2);
-	val = multiMap(r2, engineTempSensorResistance, engineTempF,11);
+	val = multiMap(r2, engineTempSensorResistance, engineTempF,17);
 	Serial.println(val);
-	Serial.print("The engine temp is:");
-	Serial.print(val,0);
-	Serial.println("F");
+	//Serial.println(r2);
+	//Serial.println(vOut);
+	//Serial.print("The engine temp is:");
+	//Serial.print(val,0);
+	//Serial.println("F");
 
 	if (millis() - lastMillis >= 2 * 1000UL)
 	{
@@ -267,15 +310,35 @@ void loop()
 	//lcd.setCursor(1, 1);
 	//lcd.print("OIL BAR:");
 	//lcd.print(val);
+
+	delay(1000);
+}
+
+double analogInputToVolts(int countsMin, int countsMax, int countsIn, double vMin, double vMax) {
+	double vOut = countsIn * ((vMax - vMin) / (countsMax - countsMin));
+	return vOut;
+}
+
+double voltageToR2(double vIn, double vOut, double r1) {
+	double r2 = (vOut * r1) / (vIn - vOut);
+	return r2;
 }
 
 double voltageToResistance(int countsMin, int countsMax, int countsIn, double vMin, double vMax, double r1)
 {
+	//Get volts per input count
+
+
+	//Calculate resistance from voltage in
+	//vOut = R2/(R1+R2) * Vin
+	//R2 = (vOut*R1)/(vIn-vOut)
+	//R2 = (countsIn
+
 	//0-1024 counts = 0-3.3V
 	// 1 count = 0.00322266V
 	//0.0024390 volts per ohm of resistance
 	// 3.3 volts/
-	// Convert the analog reading counts (which goes from minCounts to 1maxCounts) to a voltage (0 to vIn):
+	// Convert the analog reading counts (which goes from minCounts to maxCounts) to a voltage (vMin to vMax):
 	float vOut = countsIn * ((vMax-vMin) / (countsMax - countsMin));
 	Serial.println(vOut);
 	// Find the resistance of R2. R2 = Vout*R1/Vin-Vout
