@@ -12,6 +12,7 @@
 #include "CAN.h"
 #include "LiquidCrystal_I2C.h"
 #include <avr/pgmspace.h> 
+
 unsigned long lastMillis;
 uint32_t recievePgns[]{ 59392 ,59904, 60928 };
 uint32_t transmitPgns[]{0};
@@ -69,7 +70,10 @@ typedef struct {
 	byte priority;//0=Highest,7=Lowest
 	bool msgType;//0=ISO,1=NMEA2000
 	unsigned pgn;
-	byte sourceAddr;//Adress of producing CA
+	byte sourceAddr;//Address of producing CA
+	byte desinationAddr;//Address of target CA
+	byte pf;//PF (byte 1)
+	byte ps;//PS (byte 2)
 }Extended_Id;
 
 // note: the _in array should have increasing values
@@ -96,24 +100,32 @@ void onCanRecieved(int size) {
 	if (CAN.packetExtended()) {
 		extendedPacketId.val = CAN.packetId();
 		if (sizeof(extendedPacketId.bytes) == 4) {
-			Serial.print("Extended packet recieved from address:");
-			Serial.println(extendedPacketId.bytes[0]);
-			Extended_Id extId = parseCanExtendedId(extendedPacketId.bytes);
+			Extended_Id extId;
+			extId = parseCanExtendedId(extendedPacketId.bytes);
+			Serial.println(extId.pgn);
 			int dataLen = CAN.available();
 			uint8_t data[8];
 			CAN.readBytes(data, dataLen);
-			for (byte b : data)
-				Serial.print((char)b);
-			bool isRecievePgn = false;//check if pgn is supported
-			for (int x = 0; x < sizeof(recievePgns); x++) {
-				if (extId.pgn == recievePgns[x]){				
-					isRecievePgn = true;
-					break;
-				}
+
+
+			if (extId.pgn == 59904)
+			{
+				Serial.println("ISO Request");
+				
 			}
-			if (isRecievePgn) {
-				processRecievedMsg(extId, data);//process supported pgn
-			}
+
+			//for (byte b : data)
+			//	Serial.print((char)b);
+			//bool isRecievePgn = false;//check if pgn is supported
+			//for (int x = 0; x < sizeof(recievePgns); x++) {
+			//	if (extId.pgn == recievePgns[x]){				
+			//		isRecievePgn = true;
+			//		break;
+			//	}
+			//}
+			//if (isRecievePgn) {
+			//	processRecievedMsg(extId, data);//process supported pgn
+			//}
 		}
 	}
 }
@@ -143,21 +155,23 @@ Extended_Id parseCanExtendedId(byte* idFrame)
 	//idFrame[1] = byte[2] of CAN ID frame
 	//idFrame[2] = byte[1] of CAN ID frame
 	//idFrame[3] = byte[0] of CAN ID frame
-	Serial.print("Pgn:");
 	Extended_Id extId;
 	if (sizeof(idFrame) == 4) {
-		Extended_Id extId;
+		extId.sourceAddr = idFrame[0];//source address
+		extId.ps = idFrame[1];//ps
+		extId.pf = idFrame[2];//pf
 		extId.msgType = (0x1 & idFrame[3]);//msg type
 		extId.pgn = extId.msgType;
-		extId.pgn = (extId.pgn << 8) + idFrame[2];//pf
+		extId.pgn = (extId.pgn << 8) + extId.pf;//pf
 		byte ps;
-		if (idFrame[1] > 239)
-			ps = 0x0;
-		else
-			ps = idFrame[1];
-		extId.pgn = (extId.pgn << 8) + ps;//ps
-		Serial.println(extId.pgn);
-		extId.sourceAddr = idFrame[0];//source address
+		//if pf is 0 - 239, ps is the address of the destination CA
+		//if pf is > 239, ps is meaningless relative to the destination CA
+		if (extId.pf < 240)
+		{
+			extId.desinationAddr = ps;
+			extId.ps = 0x0;
+		}
+		extId.pgn = (extId.pgn << 8) + extId.ps;//ps
 	}
 	return extId;
 }
@@ -199,11 +213,10 @@ void updateLcd(double waterTemp, double oilPress) {
 	lcd.print(waterTemp, 0);
 }
 
-
 // the setup function runs once when you press reset or power the board
-void setup() 
-{
-	lcd.init();                      // initialize the lcd 
+void setup(){
+	// initialize the lcd 
+	lcd.init();                      
 	// Print a message to the LCD.
 	lcd.backlight();
 	lcd.setCursor(1, 0);
@@ -212,8 +225,8 @@ void setup()
 	lcd.print("BOOTING...");
 	delay(3000);
 
-	// start the CAN bus at 500 kbps
-	if (!CAN.begin(500E3)) {
+	//start the CAN bus at 250 kbps
+	if (!CAN.begin(250E3)) {
 		lcd.clear();
 		lcd.setCursor(1, 0);
 		lcd.print("CAN BUS INIT FAILED!");
@@ -225,25 +238,23 @@ void setup()
 		lcd.setCursor(1, 0);
 		lcd.print("CAN BUS ONLINE!");
 	}
-	CAN.loopback();
+	//CAN.loopback();
 	CAN.onReceive(onCanRecieved);
 	lcd.clear();
 	analogReadResolution(12);
 }
-
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-
 	//First pass
-	if (isFirstScan) {
-		firstScan();
-		//sendAddressClaimRequest();
-		//CAN.available
-		//sendAddressClaim(getSavedAddr());
+	//if (isFirstScan) {
+	//	firstScan();
+	//	//sendAddressClaimRequest();
+	//	//CAN.available
+	//	//sendAddressClaim(getSavedAddr());
 
-		isFirstScan = false;
-	}
+	//	isFirstScan = false;
+	//}
 
 
 	// send packet: id is 11 bits, packet can contain up to 8 bytes of data
@@ -272,34 +283,34 @@ void loop()
 
 	//Serial.println("done");
 
-	double vInMin = 0.0;
-	double vInMax = 3.3;
-	double vIn = 5.0;
-	double r1 = 1000.00;
-	double r2 = 0.00;
-	double val = 0.00;
+	//double vInMin = 0.0;
+	//double vInMax = 3.3;
+	//double vIn = 5.0;
+	//double r1 = 1000.00;
+	//double r2 = 0.00;
+	//double val = 0.00;
 
-	//Coolant temp
-	//Serial.println(analogRead(A0));
-	double ref = analogInputToVolts(0, 4096, analogRead(A1), 0, 3.3);
-	vIn = ref * 2;
-	Serial.println(ref);
-	double vOut = analogInputToVolts(0, 4096, analogRead(A0), vInMin, vInMax);
-	r2 = voltageToR2(vIn, vOut, r1);
-	Serial.println(r2);
-	val = multiMap(r2, engineTempSensorResistance, engineTempF,17);
-	Serial.println(val);
+	////Coolant temp
+	////Serial.println(analogRead(A0));
+	//double ref = analogInputToVolts(0, 4096, analogRead(A1), 0, 3.3);
+	//vIn = ref * 2;
+	//Serial.println(ref);
+	//double vOut = analogInputToVolts(0, 4096, analogRead(A0), vInMin, vInMax);
+	//r2 = voltageToR2(vIn, vOut, r1);
+	//Serial.println(r2);
+	//val = multiMap(r2, engineTempSensorResistance, engineTempF,17);
+	//Serial.println(val);
 	//Serial.println(r2);
 	//Serial.println(vOut);
 	//Serial.print("The engine temp is:");
 	//Serial.print(val,0);
 	//Serial.println("F");
 
-	if (millis() - lastMillis >= 2 * 1000UL)
-	{
-		lastMillis = millis();  //get ready for the next iteration
-		updateLcd(val,0);
-	}
+	//if (millis() - lastMillis >= 2 * 1000UL)
+	//{
+	//	lastMillis = millis();  //get ready for the next iteration
+	//	updateLcd(val,0);
+	//}
 
 	//Oil pressure
 	//r2 = voltageToResistance(analogRead(A1), vIn, r1);
@@ -311,7 +322,7 @@ void loop()
 	//lcd.print("OIL BAR:");
 	//lcd.print(val);
 
-	delay(1000);
+	//delay(1000);
 }
 
 double analogInputToVolts(int countsMin, int countsMax, int countsIn, double vMin, double vMax) {
