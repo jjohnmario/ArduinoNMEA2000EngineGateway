@@ -121,7 +121,7 @@ void onCanRecieved(int size) {
 				//Allowed pgns
 				switch (reqPgn) {
 				case 60928: {//ISO Address Claim
-					sendAddressClaim(0,extId.sourceAddr,0);
+					sendAddressClaim(1,extId.sourceAddr,0);
 					break;
 				}
 				}
@@ -187,9 +187,13 @@ Extended_Id parseCanExtendedId(byte* idFrame)
 byte* sendAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
 	uint32_t id = 0x18;
 	id = (id << 8) + 0xEE;
-	id = (id << 8) + (destAddr,HEX);
-	id = (id << 8) + (srcAddr, HEX);
+	id = (id << 8) + (destAddr);
+	id = (id << 8) + (srcAddr);
 	CAN.beginExtendedPacket(id);
+	CAN.write(0x0);
+	CAN.write(0x0);
+	CAN.write(0x0);
+	CAN.write(0x0);
 	CAN.write(0x0);
 	CAN.write(0x0);
 	CAN.write(0x0);
@@ -245,7 +249,7 @@ void setup(){
 	CAN.onReceive(onCanRecieved);
 	lcd.clear();
 	//analogReadResolution(12);
-	sendAddressClaim(0,255,0);
+	sendAddressClaim(1,255,0);
 }
 // the loop function runs over and over again until power down or reset
 void loop()
