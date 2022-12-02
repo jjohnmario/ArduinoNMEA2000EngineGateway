@@ -39,6 +39,9 @@
     <ClInclude Include="..\..\..\..\Downloads\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DeviceInformation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CANController.cpp">
@@ -51,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\Downloads\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DeviceInformation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

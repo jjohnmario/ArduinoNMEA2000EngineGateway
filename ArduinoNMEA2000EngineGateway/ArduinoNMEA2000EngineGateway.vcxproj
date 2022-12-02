@@ -117,6 +117,7 @@
     <ClInclude Include="..\..\..\..\Downloads\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C.h" />
     <ClInclude Include="CAN.h" />
     <ClInclude Include="CANController.h" />
+    <ClInclude Include="DeviceInformation.h" />
     <ClInclude Include="ESP32SJA1000.h" />
     <ClInclude Include="MCP2515.h" />
     <ClInclude Include="__vm\.ArduinoNMEA2000EngineGateway.vsarduino.h" />
@@ -124,6 +125,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\..\Downloads\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C-1.1.2\LiquidCrystal_I2C.cpp" />
     <ClCompile Include="CANController.cpp" />
+    <ClCompile Include="DeviceInformation.cpp" />
     <ClCompile Include="ESP32SJA1000.cpp" />
     <ClCompile Include="MCP2515.cpp" />
   </ItemGroup>

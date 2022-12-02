@@ -4,6 +4,7 @@
  Author:	jjohn
 */
 
+#include "DeviceInformation.h"
 #include "CanMessage.h"
 #include <iostream>
 #include <map>
@@ -102,30 +103,45 @@ void onCanRecieved(int size) {
 		if (sizeof(extendedPacketId.bytes) == 4) {
 			Extended_Id extId;
 			extId = parseCanExtendedId(extendedPacketId.bytes);
-			Serial.println(extId.pgn);
+			//Read up to 8 bytes of data 
 			int dataLen = CAN.available();
 			uint8_t data[8];
 			CAN.readBytes(data, dataLen);
 
-
+			//ISO PGN Request 59904
 			if (extId.pgn == 59904)
 			{
-				Serial.println("ISO Request");
-				
+				//Decode requested PGN
+				Serial.print("ISO Request (59904) for PGN: ");
+				uint reqPgn = (0x1 & data[0]);//msg type 0=ISO, 1=NMEA2000
+				reqPgn = (reqPgn << 8) + data[1];
+				reqPgn = (reqPgn << 8) + data[2];
+				Serial.println(reqPgn);
+
+				//Allowed pgns
+				switch (reqPgn) {
+				case 60928: {//ISO Address Claim
+					sendAddressClaim(0,extId.sourceAddr,0);
+					break;
+				}
+				}
+			}
+			//ISO Address Claim 60928
+			else if (extId.pgn == 60928)
+			{
+				//Parse 8 byte array to NAME
+				uint64_t name = data[0];
+				name = (name << 8) + data[1];
+				name = (name << 8) + data[2];
+				name = (name << 8) + data[3];
+				name = (name << 8) + data[4];
+				name = (name << 8) + data[5];
+				name = (name << 8) + data[6];
+				name = (name << 8) + data[7];
+				Serial.print("NAME:");
+				Serial.println(name);
 			}
 
-			//for (byte b : data)
-			//	Serial.print((char)b);
-			//bool isRecievePgn = false;//check if pgn is supported
-			//for (int x = 0; x < sizeof(recievePgns); x++) {
-			//	if (extId.pgn == recievePgns[x]){				
-			//		isRecievePgn = true;
-			//		break;
-			//	}
-			//}
-			//if (isRecievePgn) {
-			//	processRecievedMsg(extId, data);//process supported pgn
-			//}
 		}
 	}
 }
@@ -133,22 +149,13 @@ void processRecievedMsg(Extended_Id extId, byte* data) {
 	Serial.println("PGN is valid.");
 	//Allowed pgns
 	switch (extId.pgn) {
-	case 59392://ISO Acknowledge
-		break;
-	case 59904: {//ISO Request
-
-		break;
-	}
 
 	case 60928://ISO Address Claim
 		break;
 	}
 }
 
-void processPgn59904(Extended_Id extId, byte* data) {
-
-}
-
+//Parses a byte array to an extended packet ID.
 Extended_Id parseCanExtendedId(byte* idFrame)
 {
 	//idFrame[0] = byte[3] of CAN ID frame
@@ -176,22 +183,18 @@ Extended_Id parseCanExtendedId(byte* idFrame)
 	return extId;
 }
 
-byte* makeAddressClaim(int addr) {
-	//For now set NAME to zero
-	byte bytes[4];
-	bytes[0] = 0x0;
-	bytes[1] = 0x0;
-	bytes[2] = 0x0;
-	bytes[3] = 0x0;
-}
-
-void sendAddressClaimRequest(uint8_t sourceAddr)
-{
-	CAN.beginExtendedPacket(0x0);
+//Sends an address claim to the desired destination.
+byte* sendAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
+	uint32_t id = 0x18;
+	id = (id << 8) + 0xEE;
+	id = (id << 8) + (destAddr,HEX);
+	id = (id << 8) + (srcAddr, HEX);
+	CAN.beginExtendedPacket(id);
+	CAN.write(0x0);
+	CAN.write(0x0);
+	CAN.write(0x0);
+	CAN.write(0x1);
 	CAN.endPacket();
-	delay(1000);//delay while address claims are returned
-
-
 }
 
 int getSavedAddr()
@@ -241,7 +244,8 @@ void setup(){
 	//CAN.loopback();
 	CAN.onReceive(onCanRecieved);
 	lcd.clear();
-	analogReadResolution(12);
+	//analogReadResolution(12);
+	sendAddressClaim(0,255,0);
 }
 // the loop function runs over and over again until power down or reset
 void loop()
