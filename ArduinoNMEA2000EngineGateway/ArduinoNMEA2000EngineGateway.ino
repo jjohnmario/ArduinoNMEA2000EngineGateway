@@ -60,9 +60,9 @@ double engineTempF[] = {
 	32.00,
 	14.00 
 };
-uint64_t deviceName;
+uint64_t thisCanNAME;
 bool isFirstScan = true;
-char claimedAddr;
+byte claimedAddr = 0x2;
 union {
 	long val;
 	uint8_t bytes[4];
@@ -118,7 +118,6 @@ void onCanRecieved(int size) {
 
 void processN2kMsg(Extended_Id extId, byte* data)
 {
-
 	//ISO PGN Request 59904
 	if (extId.pgn == 59904)
 	{
@@ -133,7 +132,7 @@ void processN2kMsg(Extended_Id extId, byte* data)
 		switch (reqPgn) {
 			//ISO Address Claim
 		case 60928: {
-			sendAddressClaim(claimedAddr, 255, deviceName);
+			sendAddressClaim(claimedAddr, 255, thisCanNAME);
 			break;
 		}
 		}
@@ -150,8 +149,7 @@ void processN2kMsg(Extended_Id extId, byte* data)
 		name = (name << 8) + data[5];
 		name = (name << 8) + data[6];
 		name = (name << 8) + data[7];
-		Serial.print("NAME:");
-		Serial.println(name);
+		negotiateAddressClaim(extId.sourceAddr, extId.desinationAddr, name);
 	}
 
 }
@@ -187,14 +185,14 @@ Extended_Id parseCanExtendedId(byte* idFrame)
 //Sends an address claim to the desired destination.
 void sendAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
 
-	if (deviceName != 0)
+	if (thisCanNAME != 0)
 	{
 		uint32_t id = 0x18;
 		id = (id << 8) + 0xEE;
 		id = (id << 8) + (destAddr);
 		id = (id << 8) + (srcAddr);
 		CAN.beginExtendedPacket(id);
-		byte* nameBytes = (byte*)&deviceName;
+		byte* nameBytes = (byte*)&thisCanNAME;
 		CAN.write(nameBytes[0]);
 		CAN.write(nameBytes[1]);
 		CAN.write(nameBytes[2]);
@@ -204,6 +202,28 @@ void sendAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
 		CAN.write(nameBytes[6]);
 		CAN.write(nameBytes[7]);
 		CAN.endPacket();
+	}
+}
+
+//Negotiates an address claim for a network CAN device.
+void negotiateAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
+	if (thisCanNAME != 0)
+	{
+		/*
+		* If the address of the calling device is equal to this device then
+		* compare NAME of this device and the calling device.
+		* If this devices NAME is greater than the calling device's NAME
+		* then this device must surrender its address and claim a new address
+		* using the address claim process.
+		*/
+		//Compare NAME of this device and the calling device.
+		if (srcAddr == claimedAddr) {
+			if (thisCanNAME > name) {
+				Serial.println("Address conflict detected. Claiming new address...");
+				claimedAddr++;
+				sendAddressClaim(claimedAddr, 255, thisCanNAME);
+			}
+		}
 	}
 }
 
@@ -296,11 +316,8 @@ void setup(){
 	lcd.print("BOOTING...");
 	delay(3000);
 
-	//Read saved claimed address from flash memory
-	claimedAddr = pgm_read_byte(0x0);
-
 	//Create CAN device NAME
-	deviceName = createDeviceName(2046, 1, 0, 0, 130, 25, 4, 0);
+	thisCanNAME = createDeviceName(2046, 1, 0, 0, 130, 25, 4, 0);
 
 	//start the CAN bus at 250 kbps
 	if (!CAN.begin(250E3)) {
@@ -323,48 +340,11 @@ void setup(){
 	//analogReadResolution(12);
 	
 	//Send address claim
-	sendAddressClaim(claimedAddr, 255, deviceName);
+	sendAddressClaim(claimedAddr, 255, thisCanNAME);
 }
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-	//First pass
-	//if (isFirstScan) {
-	//	firstScan();
-	//	//sendAddressClaimRequest();
-	//	//CAN.available
-	//	//sendAddressClaim(getSavedAddr());
-
-	//	isFirstScan = false;
-	//}
-
-
-	// send packet: id is 11 bits, packet can contain up to 8 bytes of data
-	//Serial.print("Sending packet ... ");
-
-	//CAN.beginPacket(0x12);
-	//CAN.write('h');
-	//CAN.write('e');
-	//CAN.write('l');
-	//CAN.write('l');
-	//CAN.write('o');
-	//CAN.endPacket();
-
-	//Serial.println("done");
-
-	// send extended packet: id is 29 bits, packet can contain up to 8 bytes of data
-	//Serial.print("Sending extended packet ... ");
-
-	//CAN.beginExtendedPacket(0x18DA6005);
-	//CAN.write('w');
-	//CAN.write('o');
-	//CAN.write('r');
-	//CAN.write('l');
-	//CAN.write('d');
-	//CAN.endPacket();
-
-	//Serial.println("done");
-
 	//double vInMin = 0.0;
 	//double vInMax = 3.3;
 	//double vIn = 5.0;
