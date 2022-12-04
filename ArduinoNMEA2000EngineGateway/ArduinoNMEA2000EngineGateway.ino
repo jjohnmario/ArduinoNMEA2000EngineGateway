@@ -134,15 +134,15 @@ void processN2kMsg(Extended_Id extId, byte* data)
 		switch (reqPgn) {
 			
 			case 60928: { //ISO Address Claim
-				handlePgn60928(255);
+				writePgn60928(255);
 				break;
 			}
 			case 126996: {//Product Information
-				handlePgn126996(255);
+				writePgn126996(255);
 				break;
 			}
 			case 126464: { //PGN List
-				handlePgn126464(255);
+				writePgn126464(255);
 				break;
 			}
 		}
@@ -161,7 +161,6 @@ void processN2kMsg(Extended_Id extId, byte* data)
 		name = (name << 8) + data[7];
 		negotiateAddressClaim(extId.sourceAddr, extId.desinationAddr, name);
 	}
-
 }
 
 //Parses a byte array to an extended packet ID.
@@ -237,13 +236,13 @@ void negotiateAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
 	}
 }
 
-//Handle Address Claim
-void handlePgn60928(byte destAddr) {
+//PGN 60928: Address Claim
+void writePgn60928(byte destAddr) {
 	sendAddressClaim(claimedAddr, destAddr, thisCanNAME);
 }
 
-//Handle PGN List Request
-void handlePgn126464(byte destAddr) {
+//PGN 126464: PGN List Request (transmit/recieve)
+void writePgn126464(byte destAddr) {
 
 	//Reset sequencer
 	pgn126464FastPacketSeq = 0;
@@ -272,12 +271,12 @@ void handlePgn126464(byte destAddr) {
 	CAN.beginExtendedPacket(id);
 	CAN.write(pgn126464FastPacketSeq);
 	CAN.write(0x0);//PGN 60928 (byte 3)
-	CAN.write(0x1);//PGN 127245
+	CAN.write(0x0D);//PGN 127245
 	CAN.write(0xF1);
-	CAN.write(0x0D);
-	CAN.write(0x1);//PGN 130576
+	CAN.write(0x1);
+	CAN.write(0x10);//PGN 130576
 	CAN.write(0xFE);
-	CAN.write(0x10);
+	CAN.write(0x1);
 	CAN.endPacket();
 
 	//Reset sequencer
@@ -311,8 +310,8 @@ void handlePgn126464(byte destAddr) {
 	pgn126464FastPacketSeq++;
 }
 
-//Handle Product Information Request
-void handlePgn126996(byte destAddr) {
+//PGN 126996: Product Information Request
+void writePgn126996(byte destAddr) {
 
 	//Data
 	uint8_t n2Kver[2];
@@ -321,18 +320,18 @@ void handlePgn126996(byte destAddr) {
 	uint8_t prodCode[2];
 	prodCode[1] = 0x04;
 	prodCode[0] = 0xD2;
-	char modId[32];
-	String modIdStr = "Marioware Anlg to N2K Gateway";
-	modIdStr.toCharArray(modId, 32, 0);
-	char swVer[32];
+	char modId[32] = { '/0' };
+	String modIdStr = "Marioware Rudder/Trim Module";
+	modIdStr.toCharArray(modId, modIdStr.length()+1, 0);
+	char swVer[32] = {'/0'};
 	String swVerStr = "1.0.0.0 (2022-12-02)";
-	swVerStr.toCharArray(swVer, 32, 0);
-	char modVer[32];
+	swVerStr.toCharArray(swVer, swVerStr.length()+1, 0);
+	char modVer[32] = { '/0' };
 	String modVerStr = "1.0.0.0 (2022-12-02)";
-	modVerStr.toCharArray(modVer, 32, 0);
-	char modSer[32];
+	modVerStr.toCharArray(modVer, modVerStr.length()+1, 0);
+	char modSer[32] = { '/0' };
 	String modSerStr = "00000001";
-	modSerStr.toCharArray(modSer, 32, 0);
+	modSerStr.toCharArray(modSer, modSerStr.length()+1, 0);
 	uint8_t certLvl = 0;
 	uint8_t loadEqv = 2;
 
@@ -600,6 +599,52 @@ void handlePgn126996(byte destAddr) {
 	CAN.endPacket();
 }
 
+//PGN 127345: Rudder
+void writePgn127245(byte destAddr) {
+
+	//1 radian = 0.0057295779513082332 degrees
+	// 0.785398 radians = 45 degrees
+	// 1.5708 radians = 90 degress
+	//Create packet ID
+	uint32_t id = 0xD;
+	id = (id << 8) + 0xF1;
+	id = (id << 8) + 0x0D;
+	id = (id << 8) + (claimedAddr);
+	CAN.beginExtendedPacket(id);
+	CAN.write(0x0);//Instance
+	CAN.write(0x0);//Direction order
+	CAN.write(0x0);//Angle order
+	CAN.write(0x0);
+	CAN.write(0x5C);//Postion in radians/10000 (example 13/10000 = 0.0013)
+	CAN.write(0x3D);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.endPacket();
+}
+
+//Small Craft Status (Trim Tabs)
+void writePgn130576(byte destAddr){
+
+	// 0-100%, 0% = tabs fully up, 100% = tabs fully down
+	//Create packet ID
+	uint32_t id = 0xD;
+	id = (id << 8) + 0xFE;
+	id = (id << 8) + 0x10;
+	id = (id << 8) + (claimedAddr);
+	CAN.beginExtendedPacket(id);
+	CAN.write(0xB);//Port trim tab
+	CAN.write(0xD);//Stbd trim tab
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.endPacket();
+}
+
+
+
 //Creates CAN device NAME
 uint64_t createDeviceName(uint32_t mfrCode,uint32_t serial,uint8_t funcInst,
 	uint8_t ecuInst,uint8_t function, uint8_t vehicleSys,uint8_t indGroup, uint8_t vehicleSysInst)
@@ -718,7 +763,9 @@ void setup(){
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-
+	writePgn127245(255);
+	writePgn130576(255);
+	delay(500);
 	//double vInMin = 0.0;
 	//double vInMax = 3.3;
 	//double vIn = 5.0;
