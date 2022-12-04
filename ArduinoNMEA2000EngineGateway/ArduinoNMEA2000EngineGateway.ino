@@ -14,6 +14,8 @@
 #include "LiquidCrystal_I2C.h"
 #include <avr/pgmspace.h> 
 
+uint8_t pgn126996FastPacketSeq = 0x0;
+uint8_t pgn126464FastPacketSeq = 0x64;
 unsigned long lastMillis;
 uint32_t recievePgns[]{ 59392 ,59904, 60928 };
 uint32_t transmitPgns[]{0};
@@ -123,18 +125,26 @@ void processN2kMsg(Extended_Id extId, byte* data)
 	{
 		//Decode requested PGN
 		Serial.print("ISO Request (59904) for PGN: ");
-		uint reqPgn = (0x1 & data[0]);//msg type 0=ISO, 1=NMEA2000
+		uint32_t reqPgn = (0x1 & data[2]);//msg type 0=ISO, 1=NMEA2000
 		reqPgn = (reqPgn << 8) + data[1];
-		reqPgn = (reqPgn << 8) + data[2];
+		reqPgn = (reqPgn << 8) + data[0];
 		Serial.println(reqPgn);
 
-		//Allowed pgns
+		//Requested PGNs
 		switch (reqPgn) {
-			//ISO Address Claim
-		case 60928: {
-			sendAddressClaim(claimedAddr, 255, thisCanNAME);
-			break;
-		}
+			
+			case 60928: { //ISO Address Claim
+				handlePgn60928(255);
+				break;
+			}
+			case 126996: {//Product Information
+				handlePgn126996(255);
+				break;
+			}
+			case 126464: { //PGN List
+				handlePgn126464(255);
+				break;
+			}
 		}
 	}
 	//ISO Address Claim 60928
@@ -227,6 +237,369 @@ void negotiateAddressClaim(byte srcAddr, byte destAddr, uint64_t name) {
 	}
 }
 
+//Handle Address Claim
+void handlePgn60928(byte destAddr) {
+	sendAddressClaim(claimedAddr, destAddr, thisCanNAME);
+}
+
+//Handle PGN List Request
+void handlePgn126464(byte destAddr) {
+
+	//Reset sequencer
+	pgn126464FastPacketSeq = 0;
+
+	//Create packet ID
+	uint32_t id = 0x19;
+	id = (id << 8) + 0xEE;
+	id = (id << 8) + 0x00;
+	id = (id << 8) + (claimedAddr);
+	
+	//Transmit PGNs
+	//Fast packet 1
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126464FastPacketSeq);
+	CAN.write(0xD);//13 bytes to data to write
+	CAN.write(0x0); //0 = Transmit pgn
+	CAN.write(0x0); //PGN 59904
+	CAN.write(0xEA);
+	CAN.write(0x0);
+	CAN.write(0x0);//PGN 60928 (bytes 1-2)
+	CAN.write(0xEE);
+	CAN.endPacket();
+	pgn126464FastPacketSeq++;
+
+	//Fast packet 2
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126464FastPacketSeq);
+	CAN.write(0x0);//PGN 60928 (byte 3)
+	CAN.write(0x1);//PGN 127245
+	CAN.write(0xF1);
+	CAN.write(0x0D);
+	CAN.write(0x1);//PGN 130576
+	CAN.write(0xFE);
+	CAN.write(0x10);
+	CAN.endPacket();
+
+	//Reset sequencer
+	pgn126464FastPacketSeq = 0;
+
+	//Recieve PGNs
+	//Fast packet 1
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126464FastPacketSeq);
+	CAN.write(0x7);//7 bytes to data to write
+	CAN.write(0x1); //1 = Recieve pgn
+	CAN.write(0x0); //PGN 59904
+	CAN.write(0xEA);
+	CAN.write(0x0);
+	CAN.write(0x0);//PGN 60928 (bytes 1-2)
+	CAN.write(0xEE);
+	CAN.endPacket();
+	pgn126464FastPacketSeq++;
+
+	//Fast packet 2
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126464FastPacketSeq);
+	CAN.write(0x0);//PGN 60928 (byte 3)
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.write(0xFF);
+	CAN.endPacket();
+	pgn126464FastPacketSeq++;
+}
+
+//Handle Product Information Request
+void handlePgn126996(byte destAddr) {
+
+	//Data
+	uint8_t n2Kver[2];
+	n2Kver[1] = 0x08;
+	n2Kver[0] = 0x35;
+	uint8_t prodCode[2];
+	prodCode[1] = 0x04;
+	prodCode[0] = 0xD2;
+	char modId[32];
+	String modIdStr = "Marioware Anlg to N2K Gateway";
+	modIdStr.toCharArray(modId, 32, 0);
+	char swVer[32];
+	String swVerStr = "1.0.0.0 (2022-12-02)";
+	swVerStr.toCharArray(swVer, 32, 0);
+	char modVer[32];
+	String modVerStr = "1.0.0.0 (2022-12-02)";
+	modVerStr.toCharArray(modVer, 32, 0);
+	char modSer[32];
+	String modSerStr = "00000001";
+	modSerStr.toCharArray(modSer, 32, 0);
+	uint8_t certLvl = 0;
+	uint8_t loadEqv = 2;
+
+	//Reset sequencer
+	pgn126996FastPacketSeq = 0;
+
+	//Create packet ID
+	uint32_t id = 0x19;
+	id = (id << 8) + 0xF0;
+	id = (id << 8) + 0x14;
+	id = (id << 8) + (claimedAddr);
+
+	//Fast packet 1
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(0x86);//134 bytes of data to write
+	CAN.write(n2Kver[0]);
+	CAN.write(n2Kver[1]);
+	CAN.write(prodCode[0]);
+	CAN.write(prodCode[1]);
+	CAN.write(modId[0]);
+	CAN.write(modId[1]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 2
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modId[2]);
+	CAN.write(modId[3]);
+	CAN.write(modId[4]);
+	CAN.write(modId[5]);
+	CAN.write(modId[6]);
+	CAN.write(modId[7]);
+	CAN.write(modId[8]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 3
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modId[9]);
+	CAN.write(modId[10]);
+	CAN.write(modId[11]);
+	CAN.write(modId[12]);
+	CAN.write(modId[13]);
+	CAN.write(modId[14]);
+	CAN.write(modId[15]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 4
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modId[16]);
+	CAN.write(modId[17]);
+	CAN.write(modId[18]);
+	CAN.write(modId[19]);
+	CAN.write(modId[20]);
+	CAN.write(modId[21]);
+	CAN.write(modId[22]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 5
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modId[23]);
+	CAN.write(modId[24]);
+	CAN.write(modId[25]);
+	CAN.write(modId[26]);
+	CAN.write(modId[27]);
+	CAN.write(modId[28]);
+	CAN.write(modId[29]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 6
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modId[30]);
+	CAN.write(modId[31]);
+	CAN.write(swVer[0]);
+	CAN.write(swVer[1]);
+	CAN.write(swVer[2]);
+	CAN.write(swVer[3]);
+	CAN.write(swVer[4]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 7
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(swVer[5]);
+	CAN.write(swVer[6]);
+	CAN.write(swVer[7]);
+	CAN.write(swVer[8]);
+	CAN.write(swVer[9]);
+	CAN.write(swVer[10]);
+	CAN.write(swVer[11]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 8
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(swVer[12]);
+	CAN.write(swVer[13]);
+	CAN.write(swVer[14]);
+	CAN.write(swVer[15]);
+	CAN.write(swVer[16]);
+	CAN.write(swVer[17]);
+	CAN.write(swVer[18]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 9
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(swVer[19]);
+	CAN.write(swVer[20]);
+	CAN.write(swVer[21]);
+	CAN.write(swVer[22]);
+	CAN.write(swVer[23]);
+	CAN.write(swVer[24]);
+	CAN.write(swVer[25]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 10
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(swVer[26]);
+	CAN.write(swVer[27]);
+	CAN.write(swVer[28]);
+	CAN.write(swVer[29]);
+	CAN.write(swVer[30]);
+	CAN.write(swVer[31]);
+	CAN.write(modVer[0]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 11
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modVer[1]);
+	CAN.write(modVer[2]);
+	CAN.write(modVer[3]);
+	CAN.write(modVer[4]);
+	CAN.write(modVer[5]);
+	CAN.write(modVer[6]);
+	CAN.write(modVer[7]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 12
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modVer[8]);
+	CAN.write(modVer[9]);
+	CAN.write(modVer[10]);
+	CAN.write(modVer[11]);
+	CAN.write(modVer[12]);
+	CAN.write(modVer[13]);
+	CAN.write(modVer[14]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 13
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modVer[15]);
+	CAN.write(modVer[16]);
+	CAN.write(modVer[17]);
+	CAN.write(modVer[18]);
+	CAN.write(modVer[19]);
+	CAN.write(modVer[20]);
+	CAN.write(modVer[21]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 14
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modVer[22]);
+	CAN.write(modVer[23]);
+	CAN.write(modVer[24]);
+	CAN.write(modVer[25]);
+	CAN.write(modVer[26]);
+	CAN.write(modVer[27]);
+	CAN.write(modVer[28]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 15
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modVer[29]);
+	CAN.write(modVer[30]);
+	CAN.write(modSer[31]);
+	CAN.write(modSer[0]);
+	CAN.write(modSer[1]);
+	CAN.write(modSer[2]);
+	CAN.write(modSer[3]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 16
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modSer[4]);
+	CAN.write(modSer[5]);
+	CAN.write(modSer[6]);
+	CAN.write(modSer[7]);
+	CAN.write(modSer[8]);
+	CAN.write(modSer[9]);
+	CAN.write(modSer[10]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 17
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modSer[11]);
+	CAN.write(modSer[12]);
+	CAN.write(modSer[13]);
+	CAN.write(modSer[14]);
+	CAN.write(modSer[15]);
+	CAN.write(modSer[16]);
+	CAN.write(modSer[17]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 18
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modSer[18]);
+	CAN.write(modSer[19]);
+	CAN.write(modSer[20]);
+	CAN.write(modSer[21]);
+	CAN.write(modSer[22]);
+	CAN.write(modSer[23]);
+	CAN.write(modSer[24]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 19
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(modSer[25]);
+	CAN.write(modSer[26]);
+	CAN.write(modSer[27]);
+	CAN.write(modSer[28]);
+	CAN.write(modSer[29]);
+	CAN.write(modSer[30]);
+	CAN.write(modSer[31]);
+	CAN.endPacket();
+	pgn126996FastPacketSeq++;
+
+	//Fast packet 20
+	CAN.beginExtendedPacket(id);
+	CAN.write(pgn126996FastPacketSeq);
+	CAN.write(certLvl);
+	CAN.write(loadEqv);
+	CAN.endPacket();
+}
+
 //Creates CAN device NAME
 uint64_t createDeviceName(uint32_t mfrCode,uint32_t serial,uint8_t funcInst,
 	uint8_t ecuInst,uint8_t function, uint8_t vehicleSys,uint8_t indGroup, uint8_t vehicleSysInst)
@@ -314,7 +687,7 @@ void setup(){
 	lcd.print("MARIOWARE v0.1");
 	lcd.setCursor(1, 1);
 	lcd.print("BOOTING...");
-	delay(3000);
+	//delay(3000);
 
 	//Create CAN device NAME
 	thisCanNAME = createDeviceName(2046, 1, 0, 0, 130, 25, 4, 0);
@@ -345,6 +718,7 @@ void setup(){
 // the loop function runs over and over again until power down or reset
 void loop()
 {
+
 	//double vInMin = 0.0;
 	//double vInMax = 3.3;
 	//double vIn = 5.0;
