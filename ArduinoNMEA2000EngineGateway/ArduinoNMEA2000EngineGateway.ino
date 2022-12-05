@@ -110,7 +110,7 @@ void onCanRecieved(int size) {
 		if (sizeof(extendedPacketId.bytes) == 4) {
 			Extended_Id extId;
 			extId = parseCanExtendedId(extendedPacketId.bytes);
-
+			
 			//Read up to 8 bytes of data 
 			int dataLen = CAN.available();
 			uint8_t data[8];
@@ -140,14 +140,17 @@ void processN2kMsg(Extended_Id extId, byte* data)
 			
 			case 60928: { //ISO Address Claim
 				writePgn60928(255);
+				Serial.println("PGN: 60928 sent to bus.");
 				break;
 			}
 			case 126996: {//Product Information
 				writePgn126996(255);
+				Serial.println("PGN: 126996 sent to bus.");
 				break;
 			}
 			case 126464: { //PGN List
 				writePgn126464(255);
+				Serial.println("PGN: 126494 sent to bus.");
 				break;
 			}
 		}
@@ -314,7 +317,6 @@ void writePgn126464(byte destAddr) {
 	CAN.write(0xFF);
 	CAN.write(0xFF);
 	CAN.endPacket();
-	pgn126464FastPacketSeq++;
 }
 
 //PGN 126996: Product Information Request
