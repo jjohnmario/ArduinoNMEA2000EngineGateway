@@ -15,6 +15,8 @@
 #include <avr/pgmspace.h> 
 #include <avr/interrupt.h>
 
+uint8_t portTrimPct = 0x0;
+uint8_t stbdTrimPct = 0x0;
 uint8_t pgnTxDelayCtr = 0x0;
 uint16_t addrClaimCtr = 0x0;
 bool addrConflict = false;
@@ -140,17 +142,20 @@ void processN2kMsg(Extended_Id extId, byte* data)
 			
 			case 60928: { //ISO Address Claim
 				writePgn60928(255);
-				Serial.println("PGN: 60928 sent to bus.");
+				Serial.print("PGN: 60928 sent to bus address:");
+				Serial.println(255);
 				break;
 			}
 			case 126996: {//Product Information
 				writePgn126996(255);
-				Serial.println("PGN: 126996 sent to bus.");
+				Serial.print("PGN: 126996 sent to bus address:");
+				Serial.println(255);
 				break;
 			}
 			case 126464: { //PGN List
-				writePgn126464(255);
-				Serial.println("PGN: 126494 sent to bus.");
+				writePgn126464(extId.sourceAddr);
+				Serial.print("PGN: 126494 sent to bus address:");
+				Serial.println(extId.sourceAddr);
 				break;
 			}
 		}
@@ -641,8 +646,19 @@ void writePgn130576(byte destAddr){
 	id = (id << 8) + 0x10;
 	id = (id << 8) + (claimedAddr);
 	CAN.beginExtendedPacket(id);
-	CAN.write(0xB);//Port trim tab
-	CAN.write(0xD);//Stbd trim tab
+	//TEST CODE
+	if (portTrimPct < 100)
+		portTrimPct++;
+	else
+		portTrimPct = 0;
+
+	if (stbdTrimPct < 100)
+		stbdTrimPct++;
+	else
+		stbdTrimPct = 0;
+
+	CAN.write(portTrimPct);//Port trim tab
+	CAN.write(stbdTrimPct);//Stbd trim tab
 	CAN.write(0xFF);
 	CAN.write(0xFF);
 	CAN.write(0xFF);
