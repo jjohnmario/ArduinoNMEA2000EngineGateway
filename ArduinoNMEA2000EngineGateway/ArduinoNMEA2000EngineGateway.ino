@@ -647,15 +647,18 @@ void writePgn130576(byte destAddr){
 	id = (id << 8) + (claimedAddr);
 	CAN.beginExtendedPacket(id);
 	//TEST CODE
-	if (portTrimPct < 100)
-		portTrimPct++;
-	else
-		portTrimPct = 0;
+	
 
-	if (stbdTrimPct < 100)
-		stbdTrimPct++;
-	else
-		stbdTrimPct = 0;
+	Serial.println(portTrimPct);
+	//if (portTrimPct < 100)
+	//	portTrimPct++;
+	//else
+	//	portTrimPct = 0;
+
+	//if (stbdTrimPct < 100)
+	//	stbdTrimPct++;
+	//else
+	//	stbdTrimPct = 0;
 
 	CAN.write(portTrimPct);//Port trim tab
 	CAN.write(stbdTrimPct);//Stbd trim tab
@@ -833,7 +836,7 @@ void setup(){
 	CAN.onReceive(onCanRecieved);
 
 	//lcd.clear();
-	//analogReadResolution(12);
+	analogReadResolution(12);
 	
 	//Send address claim
 	sendAddressClaim(claimedAddr, 255, thisCanNAME);
@@ -842,6 +845,29 @@ void setup(){
 // the loop function runs over and over again until power down or reset
 void loop()
 {
+	int val1 = analogRead(A6);
+	delay(10);
+	int val2 = analogRead(A6);
+	delay(10);
+	int val3 = analogRead(A6);
+	delay(10);
+	int val4 = analogRead(A6);
+	delay(10);
+	int val5 = analogRead(A6);
+	delay(10);
+	int val6 = analogRead(A6);
+	delay(10);
+	int val7 = analogRead(A6);
+	delay(10);
+	int val8 = analogRead(A6);
+	delay(10);
+	int val9 = analogRead(A6);	
+	delay(10);
+	int val10 = analogRead(A6);
+	int val = (val1 + val2 + val3 + val4 + val5 + val6 + val7 + val8 + val9 +val10) / 10;
+	double valDouble = val;
+	double portTrimPctDouble = (valDouble / 4096) * 100;
+	portTrimPct = portTrimPctDouble;
 	//delay(500);
 	//double vInMin = 0.0;
 	//double vInMax = 3.3;
