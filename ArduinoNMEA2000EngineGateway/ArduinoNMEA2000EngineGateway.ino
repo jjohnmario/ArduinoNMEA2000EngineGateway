@@ -15,6 +15,9 @@
 #include <avr/pgmspace.h> 
 #include <avr/interrupt.h>
 
+int a0Counts = 0x0;
+int a1Counts = 0x0;
+int a2Counts = 0x0; 
 uint8_t portTrimPct = 0x0;
 uint8_t stbdTrimPct = 0x0;
 uint8_t pgnTxDelayCtr = 0x0;
@@ -786,9 +789,10 @@ void TC4_Handler() {                                         // Interrupt Servic
 		if (pgnTxDelayCtr < 100)
 			pgnTxDelayCtr++;
 		else {
-			//5000ms since last address claim conflict which implies the conflict has been resolved.
+			//500ms since last address claim conflict which implies the conflict has been resolved.
 			if (addrClaimCtr >= 1000) {
 				{
+					updateLcd();
 					writePgn127245(255);
 					writePgn130576(255);
 					pgnTxDelayCtr = 0;
@@ -800,6 +804,25 @@ void TC4_Handler() {                                         // Interrupt Servic
 	}
 }
 
+void updateLcd(){
+	lcd.clear();
+	//Port trim
+	lcd.setCursor(0, 0);
+	lcd.print("PT:");
+	lcd.print(a0Counts);
+
+	//Rudder
+	lcd.setCursor(8, 0);
+	lcd.print("RDR:");
+	lcd.print(a0Counts);
+
+	//Stbd trim
+	lcd.setCursor(0, 1);
+	lcd.print("ST:");
+	lcd.print(a0Counts);
+
+ }
+
 // the setup function runs once when you press reset or power the board
 void setup(){
 	// initialize the lcd 
@@ -810,7 +833,7 @@ void setup(){
 	lcd.print("MARIOWARE v0.1");
 	lcd.setCursor(1, 1);
 	lcd.print("BOOTING...");
-	//delay(3000);
+	delay(3000);
 
 	//Setup timer interrupt of 500 milliseconds
 	setupTc4Timer();
@@ -828,8 +851,8 @@ void setup(){
 	else
 	{
 		lcd.clear();
-		lcd.setCursor(1, 0);
-		lcd.print("CAN BUS ONLINE!");
+		lcd.setCursor(0, 0);
+		lcd.print("NMEA2000 ONLINE!");
 	}
 
 	//Subscribe to new CAN messages
@@ -845,28 +868,50 @@ void setup(){
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-	int val1 = analogRead(A6);
+	int val1 = analogRead(A0);
 	delay(10);
-	int val2 = analogRead(A6);
+	int val2 = analogRead(A0);
 	delay(10);
-	int val3 = analogRead(A6);
+	int val3 = analogRead(A0);
 	delay(10);
-	int val4 = analogRead(A6);
+	int val4 = analogRead(A0);
 	delay(10);
-	int val5 = analogRead(A6);
+	int val5 = analogRead(A0);
 	delay(10);
-	int val6 = analogRead(A6);
+	int val6 = analogRead(A0);
 	delay(10);
-	int val7 = analogRead(A6);
+	int val7 = analogRead(A0);
 	delay(10);
-	int val8 = analogRead(A6);
+	int val8 = analogRead(A0);
 	delay(10);
-	int val9 = analogRead(A6);	
+	int val9 = analogRead(A0);	
 	delay(10);
-	int val10 = analogRead(A6);
-	int val = (val1 + val2 + val3 + val4 + val5 + val6 + val7 + val8 + val9 +val10) / 10;
-	double valDouble = val;
-	double portTrimPctDouble = (valDouble / 4096) * 100;
+	int val10 = analogRead(A0);
+	a0Counts = (val1 + val2 + val3 + val4 + val5 + val6 + val7 + val8 + val9 +val10) / 10;
+	//double valDouble = a0Counts;
+	int a0CountsMin = 1500;
+	int a0CountsMax = 1000;
+	bool invert = false;
+	if (a0Counts < a0CountsMin)
+		a0Counts = a0CountsMin;
+	if (a0Counts > a0CountsMax)
+		a0Counts = a0CountsMax;
+	if (a0CountsMin > a0CountsMax) {
+		int minTemp = a0CountsMax;
+		int maxTemp = a0CountsMin;
+		a0CountsMax = maxTemp;
+		a0CountsMin = minTemp;
+		invert = true;
+
+
+	}
+
+
+	double portTrimPctDouble = analogInputToPct(a0CountsMin, a0CountsMax, a0Counts, 0, 100);
+	if (invert)
+		portTrimPctDouble = 100.00 - portTrimPctDouble;
+
+	//double portTrimPctDouble = (valDouble / 4096) * 100;
 	portTrimPct = portTrimPctDouble;
 	//delay(500);
 	//double vInMin = 0.0;
@@ -910,6 +955,12 @@ void loop()
 
 	//delay(1000);
 }
+
+double analogInputToPct(int countsMin, int countsMax, int countsIn, double pctMin, double pctMax) {
+	double pctOut = (countsIn - countsMin) * ((pctMax - pctMin) / (countsMax - countsMin));
+	return pctOut;
+}
+
 
 double analogInputToVolts(int countsMin, int countsMax, int countsIn, double vMin, double vMax) {
 	double vOut = countsIn * ((vMax - vMin) / (countsMax - countsMin));
