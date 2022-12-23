@@ -47,9 +47,6 @@ typedef struct {
 const int chipSelect = SDCARD_SS_PIN;
 const char* filename = "/config.txt";
 Config config;
-int a0Counts = 0x0;
-int a1Counts = 0x0;
-int a2Counts = 0x0; 
 uint8_t portTrimPct = 0x0;
 uint8_t stbdTrimPct = 0x0;
 uint8_t pgnTxDelayCtr = 0x0;
@@ -107,6 +104,125 @@ uint64_t thisCanNAME;
 bool isFirstScan = true;
 byte claimedAddr = 0x2;
 
+//***************************Start of Arduino Code******************************
+
+// the setup function runs once when you press reset or power the board
+void setup() {
+	// initialize the lcd 
+	lcd.init();
+	// Print a message to the LCD.
+	lcd.backlight();
+	lcd.setCursor(1, 0);
+	lcd.print("MARIOWARE v0.1");
+	lcd.setCursor(1, 1);
+	lcd.print("BOOTING...");
+	delay(3000);
+
+	// Initialize serial port
+	Serial.begin(9600);
+	while (!Serial) continue;
+
+	// Initialize SD library
+	while (!SD.begin()) {
+		Serial.println(F("Failed to initialize SD library"));
+		delay(1000);
+	}
+
+	// Should load default config if run for the first time
+	Serial.println(F("Loading configuration..."));
+	loadConfiguration(filename, config);
+
+	// Create configuration file
+	Serial.println(F("Saving configuration..."));
+	saveConfiguration(filename, config);
+
+	// Dump config file
+	Serial.println(F("Print config file..."));
+	printFile(filename);
+
+	//Setup timer interrupt of 500 milliseconds
+	setupTc4Timer();
+
+	//Create CAN device NAME
+	thisCanNAME = createDeviceName(2046, 1, 0, 0, 130, 25, 4, 0);
+
+	//start the CAN bus at 250 kbps
+	if (!CAN.begin(250E3)) {
+		lcd.clear();
+		lcd.setCursor(1, 0);
+		lcd.print("CAN BUS INIT FAILED!");
+		while (1);
+	}
+	else
+	{
+		lcd.clear();
+		lcd.setCursor(0, 0);
+		lcd.print("NMEA2000 ONLINE!");
+	}
+
+	//Subscribe to new CAN messages
+	CAN.onReceive(onCanRecieved);
+
+	//lcd.clear();
+	analogReadResolution(12);
+
+	//Send address claim
+	sendAddressClaim(claimedAddr, 255, thisCanNAME);
+}
+
+// the loop function runs over and over again until power down or reset
+void loop()
+{
+	//Port trim
+	readTrimInput(A0, stbdTrimPct, config.p_trim_min, config.p_trim_max);
+
+	//Stbd trim
+	readTrimInput(A1, portTrimPct, config.s_trim_min, config.s_trim_max);
+
+	//delay(500);
+	//double vInMin = 0.0;
+	//double vInMax = 3.3;
+	//double vIn = 5.0;
+	//double r1 = 1000.00;
+	//double r2 = 0.00;
+	//double val = 0.00;
+
+	////Coolant temp
+	////Serial.println(analogRead(A0));
+	//double ref = analogInputToVolts(0, 4096, analogRead(A1), 0, 3.3);
+	//vIn = ref * 2;
+	//Serial.println(ref);
+	//double vOut = analogInputToVolts(0, 4096, analogRead(A0), vInMin, vInMax);
+	//r2 = voltageToR2(vIn, vOut, r1);
+	//Serial.println(r2);
+	//val = multiMap(r2, engineTempSensorResistance, engineTempF,17);
+	//Serial.println(val);
+	//Serial.println(r2);
+	//Serial.println(vOut);
+	//Serial.print("The engine temp is:");
+	//Serial.print(val,0);
+	//Serial.println("F");
+
+	//if (millis() - lastMillis >= 2 * 1000UL)
+	//{
+	//	lastMillis = millis();  //get ready for the next iteration
+	//	updateLcd(val,0);
+	//}
+
+	//Oil pressure
+	//r2 = voltageToResistance(analogRead(A1), vIn, r1);
+	//val = multiMap(r2, oilPressSensorResistance, oilPressBar, 11);
+	//Serial.print("The engine oil pressure is:");
+	//Serial.print(val);
+	//Serial.println("Bar");
+	//lcd.setCursor(1, 1);
+	//lcd.print("OIL BAR:");
+	//lcd.print(val);
+
+	//delay(1000);
+}
+
+//***************************End of Arduino Code******************************
 
 // note: the _in array should have increasing values
 double multiMap(double val, double* _in, double* _out, uint8_t size)
@@ -922,126 +1038,6 @@ void updateLcd(){
 	lcd.print(a0Counts);
 
  }
-
-//*************************************************************************************//
-//START OF ARDUINO RUNTIME CODE//
-//*************************************************************************************//
-
-// the setup function runs once when you press reset or power the board
-void setup(){
-	// initialize the lcd 
-	lcd.init();                      
-	// Print a message to the LCD.
-	lcd.backlight();
-	lcd.setCursor(1, 0);
-	lcd.print("MARIOWARE v0.1");
-	lcd.setCursor(1, 1);
-	lcd.print("BOOTING...");
-	delay(3000);
-
-	// Initialize serial port
-	Serial.begin(9600);
-	while (!Serial) continue;
-
-	// Initialize SD library
-	while (!SD.begin()) {
-		Serial.println(F("Failed to initialize SD library"));
-		delay(1000);
-	}
-
-	// Should load default config if run for the first time
-	Serial.println(F("Loading configuration..."));
-	loadConfiguration(filename, config);
-
-	// Create configuration file
-	Serial.println(F("Saving configuration..."));
-	saveConfiguration(filename, config);
-
-	// Dump config file
-	Serial.println(F("Print config file..."));
-	printFile(filename);
-
-	//Setup timer interrupt of 500 milliseconds
-	setupTc4Timer();
-
-	//Create CAN device NAME
-	thisCanNAME = createDeviceName(2046, 1, 0, 0, 130, 25, 4, 0);
-
-	//start the CAN bus at 250 kbps
-	if (!CAN.begin(250E3)) {
-		lcd.clear();
-		lcd.setCursor(1, 0);
-		lcd.print("CAN BUS INIT FAILED!");
-		while (1);
-	}
-	else
-	{
-		lcd.clear();
-		lcd.setCursor(0, 0);
-		lcd.print("NMEA2000 ONLINE!");
-	}
-
-	//Subscribe to new CAN messages
-	CAN.onReceive(onCanRecieved);
-
-	//lcd.clear();
-	analogReadResolution(12);
-	
-	//Send address claim
-	sendAddressClaim(claimedAddr, 255, thisCanNAME);
-}
-
-// the loop function runs over and over again until power down or reset
-void loop()
-{
-	//Port trim
-	readTrimInput(A0,stbdTrimPct,config.p_trim_min,config.p_trim_max);
-
-	//Stbd trim
-	readTrimInput(A1, portTrimPct, config.s_trim_min, config.s_trim_max);
-
-	//delay(500);
-	//double vInMin = 0.0;
-	//double vInMax = 3.3;
-	//double vIn = 5.0;
-	//double r1 = 1000.00;
-	//double r2 = 0.00;
-	//double val = 0.00;
-
-	////Coolant temp
-	////Serial.println(analogRead(A0));
-	//double ref = analogInputToVolts(0, 4096, analogRead(A1), 0, 3.3);
-	//vIn = ref * 2;
-	//Serial.println(ref);
-	//double vOut = analogInputToVolts(0, 4096, analogRead(A0), vInMin, vInMax);
-	//r2 = voltageToR2(vIn, vOut, r1);
-	//Serial.println(r2);
-	//val = multiMap(r2, engineTempSensorResistance, engineTempF,17);
-	//Serial.println(val);
-	//Serial.println(r2);
-	//Serial.println(vOut);
-	//Serial.print("The engine temp is:");
-	//Serial.print(val,0);
-	//Serial.println("F");
-
-	//if (millis() - lastMillis >= 2 * 1000UL)
-	//{
-	//	lastMillis = millis();  //get ready for the next iteration
-	//	updateLcd(val,0);
-	//}
-
-	//Oil pressure
-	//r2 = voltageToResistance(analogRead(A1), vIn, r1);
-	//val = multiMap(r2, oilPressSensorResistance, oilPressBar, 11);
-	//Serial.print("The engine oil pressure is:");
-	//Serial.print(val);
-	//Serial.println("Bar");
-	//lcd.setCursor(1, 1);
-	//lcd.print("OIL BAR:");
-	//lcd.print(val);
-
-	//delay(1000);
-}
 
 /// <summary>
 /// Reads an input that is measuring trim.
