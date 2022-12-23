@@ -47,10 +47,13 @@ typedef struct {
 const int chipSelect = SDCARD_SS_PIN;
 const char* filename = "/config.txt";
 Config config;
-uint8_t portTrimPct = 0x0;
-uint8_t stbdTrimPct = 0x0;
-uint8_t pgnTxDelayCtr = 0x0;
-uint16_t addrClaimCtr = 0x0;
+uint8_t portTrimCounts;
+uint8_t portTrimPct;
+uint8_t stbdTrimCounts;
+uint8_t stbdTrimPct;
+uint8_t rudderTrimCounts;
+uint8_t pgnTxDelayCtr;
+uint16_t addrClaimCtr;
 bool addrConflict = false;
 uint8_t pgn126996FastPacketSeq = 0x0;
 uint8_t pgn126464FastPacketSeq = 0x64;
@@ -174,52 +177,13 @@ void setup() {
 void loop()
 {
 	//Port trim
-	readTrimInput(A0, stbdTrimPct, config.p_trim_min, config.p_trim_max);
+	readTrimInput(A0, portTrimPct, config.p_trim_min, config.p_trim_max, portTrimCounts);
 
 	//Stbd trim
-	readTrimInput(A1, portTrimPct, config.s_trim_min, config.s_trim_max);
+	readTrimInput(A1, stbdTrimPct, config.s_trim_min, config.s_trim_max, stbdTrimCounts);
 
-	//delay(500);
-	//double vInMin = 0.0;
-	//double vInMax = 3.3;
-	//double vIn = 5.0;
-	//double r1 = 1000.00;
-	//double r2 = 0.00;
-	//double val = 0.00;
-
-	////Coolant temp
-	////Serial.println(analogRead(A0));
-	//double ref = analogInputToVolts(0, 4096, analogRead(A1), 0, 3.3);
-	//vIn = ref * 2;
-	//Serial.println(ref);
-	//double vOut = analogInputToVolts(0, 4096, analogRead(A0), vInMin, vInMax);
-	//r2 = voltageToR2(vIn, vOut, r1);
-	//Serial.println(r2);
-	//val = multiMap(r2, engineTempSensorResistance, engineTempF,17);
-	//Serial.println(val);
-	//Serial.println(r2);
-	//Serial.println(vOut);
-	//Serial.print("The engine temp is:");
-	//Serial.print(val,0);
-	//Serial.println("F");
-
-	//if (millis() - lastMillis >= 2 * 1000UL)
-	//{
-	//	lastMillis = millis();  //get ready for the next iteration
-	//	updateLcd(val,0);
-	//}
-
-	//Oil pressure
-	//r2 = voltageToResistance(analogRead(A1), vIn, r1);
-	//val = multiMap(r2, oilPressSensorResistance, oilPressBar, 11);
-	//Serial.print("The engine oil pressure is:");
-	//Serial.print(val);
-	//Serial.println("Bar");
-	//lcd.setCursor(1, 1);
-	//lcd.print("OIL BAR:");
-	//lcd.print(val);
-
-	//delay(1000);
+	//Rudder
+	//TBD - needs to be a range of -45 deg to +45 deg
 }
 
 //***************************End of Arduino Code******************************
@@ -321,6 +285,77 @@ void printFile(const char* filename) {
 
 	// Close the file
 	file.close();
+}
+
+//Creates CAN device NAME
+uint64_t createDeviceName(uint32_t mfrCode, uint32_t serial, uint8_t funcInst,
+	uint8_t ecuInst, uint8_t function, uint8_t vehicleSys, uint8_t indGroup, uint8_t vehicleSysInst)
+{
+	/*
+		64-bit CAN NAME Fields
+		**********************
+		Bits 0-20: Identity number – This field is assigned by the manufacturer, similar to a serial number, i.e. the code must be uniquely assigned to the unit.
+		Bits 21-31: Manufacturer code – The 11-Bit Manufacturer Code is assigned by the SAE.
+		Bits 32-34: ECU Instance – A J1939 network may accommodate several ECUs of the same kind (i.e. same functionality). The Instance code separates them.
+		Bits 35-39: Function Instance
+		Bits 40-47: Function – This code, in a range between 128 and 255, is assigned according to the Industry Group. A value between 0 and 127 is not associated with any other parameter.
+		Bit 48: Reserved – Always zero.
+		Bits 49-55: Vehicle System – Vehicle systems are associated with the Industry Group and they can be, for instance, “tractor” in the “Common” industry or “trailer” in the “On-Highway” industry group.
+		Bits 56-59: Vehicle System Instance – Assigns a number to each instance on the Vehicle System (in case you connect several networks – e.g. connecting cars on a train).
+		Bits 60-62: Industry Group – These codes are associated with particular industries such as on-highway equipment, agricultural equipment, and more.
+		Bit 63: Arbitrary Address Capable – Indicates whether or not the ECU/CA can negotiate an address (1 = yes; 0 = no). Some ECUs can only support one address; others support an address range.
+	*/
+	//Limits
+	if (mfrCode > 0x1FFFFF)
+		mfrCode = 0x1FFFFF;
+	if (funcInst > 0x1F)
+		funcInst = 0x1F;
+	if (ecuInst > 0x7)
+		ecuInst = 0x7;
+	if (vehicleSys > 0x7F)
+		vehicleSys = 0x7F;
+	if (indGroup > 0x7)
+		indGroup = 0x7;
+	if (vehicleSysInst > 0xF)
+		vehicleSysInst = 0xF;
+
+	//11 bits mfr code, 21 bits serial number
+	uint32_t mfrser = (mfrCode << 21);
+	mfrser = mfrser | serial;
+
+	//Function instance 5 bits, ecu instance 3 bits
+	uint8_t func_and_ecu_inst;
+	func_and_ecu_inst = (funcInst << 3);
+	func_and_ecu_inst = func_and_ecu_inst | ecuInst;
+
+	//Function - no formatting required.
+
+	//vehicle system 7 bits, bit 0 reserved always 0
+	vehicleSys = vehicleSys << 1;
+
+	//Arbitrary addr capable 1 bit, industry group 3 bits, vehicle system instance 4 bits
+	uint8_t arb_addr_cap = 1;
+	uint8_t combined = arb_addr_cap << 3;
+	combined = combined | indGroup;
+	combined = combined << 4;
+	combined = combined | vehicleSysInst;
+
+	//package it up MSB to LSB
+	uint64_t name = 0;
+	name = combined;
+	name = name << 8;
+
+	name = name | vehicleSys;
+	name = name << 8;
+
+	name = name | function;
+	name = name << 8;
+
+	name = name | func_and_ecu_inst;
+	name = name << 32;
+
+	name = name | mfrser;
+	return name;
 }
 
 //New message from CAN bus.
@@ -890,83 +925,6 @@ void writePgn130576(byte destAddr){
 	CAN.endPacket();
 }
 
-//Creates CAN device NAME
-uint64_t createDeviceName(uint32_t mfrCode,uint32_t serial,uint8_t funcInst,
-	uint8_t ecuInst,uint8_t function, uint8_t vehicleSys,uint8_t indGroup, uint8_t vehicleSysInst)
-{
-	/*
-		64-bit CAN NAME Fields
-		**********************
-		Bits 0-20: Identity number – This field is assigned by the manufacturer, similar to a serial number, i.e. the code must be uniquely assigned to the unit.
-		Bits 21-31: Manufacturer code – The 11-Bit Manufacturer Code is assigned by the SAE.
-		Bits 32-34: ECU Instance – A J1939 network may accommodate several ECUs of the same kind (i.e. same functionality). The Instance code separates them.
-		Bits 35-39: Function Instance
-		Bits 40-47: Function – This code, in a range between 128 and 255, is assigned according to the Industry Group. A value between 0 and 127 is not associated with any other parameter.
-		Bit 48: Reserved – Always zero.
-		Bits 49-55: Vehicle System – Vehicle systems are associated with the Industry Group and they can be, for instance, “tractor” in the “Common” industry or “trailer” in the “On-Highway” industry group.
-		Bits 56-59: Vehicle System Instance – Assigns a number to each instance on the Vehicle System (in case you connect several networks – e.g. connecting cars on a train).
-		Bits 60-62: Industry Group – These codes are associated with particular industries such as on-highway equipment, agricultural equipment, and more.
-		Bit 63: Arbitrary Address Capable – Indicates whether or not the ECU/CA can negotiate an address (1 = yes; 0 = no). Some ECUs can only support one address; others support an address range.
-	*/
-	//Limits
-	if (mfrCode > 0x1FFFFF)
-		mfrCode = 0x1FFFFF;
-	if (funcInst > 0x1F)
-		funcInst = 0x1F;
-	if (ecuInst > 0x7)
-		ecuInst = 0x7;
-	if (vehicleSys > 0x7F)
-		vehicleSys = 0x7F;
-	if (indGroup > 0x7)
-		indGroup = 0x7;
-	if (vehicleSysInst > 0xF)
-		vehicleSysInst = 0xF;
-
-	//11 bits mfr code, 21 bits serial number
-	uint32_t mfrser = (mfrCode << 21);
-	mfrser = mfrser | serial;
-
-	//Function instance 5 bits, ecu instance 3 bits
-	uint8_t func_and_ecu_inst;
-	func_and_ecu_inst = (funcInst << 3);
-	func_and_ecu_inst = func_and_ecu_inst | ecuInst;
-
-	//Function - no formatting required.
-
-	//vehicle system 7 bits, bit 0 reserved always 0
-	vehicleSys = vehicleSys<< 1;
-
-	//Arbitrary addr capable 1 bit, industry group 3 bits, vehicle system instance 4 bits
-	uint8_t arb_addr_cap = 1;
-	uint8_t combined = arb_addr_cap << 3;
-	combined = combined | indGroup;
-	combined = combined << 4;
-	combined = combined | vehicleSysInst;
-
-	//package it up MSB to LSB
-	uint64_t name = 0;
-	name = combined;
-	name = name << 8;
-
-	name = name | vehicleSys;
-	name = name << 8;
-
-	name = name | function;
-	name = name << 8;
-
-	name = name | func_and_ecu_inst;
-	name = name << 32;
-
-	name = name | mfrser;
-	return name;
-}
-
-void updateLcd(double waterTemp, double oilPress) {
-	lcd.setCursor(1, 0);
-	lcd.print("WATER F:");
-	lcd.print(waterTemp, 0);
-}
-
 // Set timer TC4 to call the TC4_Handler every 5ms: (8 * (29999 + 1)) / 48MHz = 5ms
 void setupTc4Timer() {
 	PORT->Group[PORTA].DIRSET.reg = PORT_PA21;// Set D7 as a digital output
@@ -1025,17 +983,17 @@ void updateLcd(){
 	//Port trim
 	lcd.setCursor(0, 0);
 	lcd.print("PT:");
-	lcd.print(a0Counts);
+	lcd.print(portTrimCounts);
 
 	//Rudder
 	lcd.setCursor(8, 0);
 	lcd.print("RDR:");
-	lcd.print(a0Counts);
+	lcd.print(stbdTrimCounts);
 
 	//Stbd trim
 	lcd.setCursor(0, 1);
 	lcd.print("ST:");
-	lcd.print(a0Counts);
+	lcd.print(rudderTrimCounts);
 
  }
 
@@ -1046,19 +1004,20 @@ void updateLcd(){
 /// <param name="trimPct">Trim reading 0-100%</param>
 /// <param name="countsMin">Input counts at 0% trim</param>
 /// <param name="countsMax">Input counts at 100% trim</param>
-void readTrimInput(uint8_t input, uint8_t &trimPct, int countsMin, int countsMax) {
+void readTrimInput(uint8_t input, uint8_t &trimPct, int countsMin, int countsMax, uint8_t &counts) {
 	int avg;
 	for (int i = 0; i < 10; i++) {
 		avg = avg + analogRead(input);
 		delay(10);
 	}
-	int counts = avg / 10;
+	counts = avg / 10;
 
 	//Limits
 	if (counts < countsMin)
 		counts = countsMin;
 	if (counts > countsMax)
 		counts = countsMax;
+
 	//Inverted (min > max)
 	bool invert = false;
 	if (countsMin > countsMax) {
