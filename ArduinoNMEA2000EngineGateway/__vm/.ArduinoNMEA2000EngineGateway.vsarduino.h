@@ -6,7 +6,7 @@
 			All non-arduino files created by visual micro and all visual studio project or solution files can be freely deleted and are not required to compile a sketch (do not delete your own code!).
 			Note: debugger breakpoints are stored in '.sln' or '.asln' files, knowledge of last uploaded breakpoints is stored in the upload.vmps.xml file. Both files are required to continue a previous debug session without needing to compile and upload again
 	
-	Hardware: Arduino MKR WiFi 1010                                                                                                      (mkrwifi1010), Platform=samd, Package=arduino
+	Hardware: Arduino MKRZERO                                                                                                              (mkrzero), Platform=samd, Package=arduino
 */
 
 #if defined(_VMICRO_INTELLISENSE)
@@ -16,16 +16,15 @@
 #define _VMDEBUG 1
 #define F_CPU 48000000L
 #define ARDUINO 108010
-#define ARDUINO_SAMD_MKRWIFI1010 1
+#define ARDUINO_SAMD_MKRZERO 1
 #define ARDUINO_ARCH_SAMD 1
 #define USE_ARDUINO_MKR_PIN_LAYOUT 1
 #define __SAMD21G18A__ 1
 #define USB_VID 0x2341
-#define USB_PID 0x8054
+#define USB_PID 0x804f
 #define USBCON 1
 #define USB_MANUFACTURER "\"Arduino
 #define USB_PRODUCT "\"Arduino
-#define USE_BQ24195L_PMIC 1
 #define __cplusplus 201103L
 #define __GNUC__ 2
 #define _Pragma(x)

@@ -14,7 +14,39 @@
 #include "LiquidCrystal_I2C.h"
 #include <avr/pgmspace.h> 
 #include <avr/interrupt.h>
+#include <SPI.h>
+#include <SD.h>
+#include <ArduinoJson.h>
 
+typedef struct {
+	int p_trim_min;
+	int p_trim_max;
+	int s_trim_min;
+	int s_trim_max;
+	int p_rudder;
+	int s_rudder;
+}Config;
+
+//Extended 29-bit CAN ID packet
+union {
+	long val;
+	uint8_t bytes[4];
+} extendedPacketId;
+
+//Extended 29-bit CAN ID deserialized
+typedef struct {
+	byte priority;//0=Highest,7=Lowest
+	bool msgType;//0=ISO,1=NMEA2000
+	unsigned pgn;
+	byte sourceAddr;//Address of producing CA
+	byte desinationAddr;//Address of target CA
+	byte pf;//PF (byte 1)
+	byte ps;//PS (byte 2)
+}Extended_Id;
+
+const int chipSelect = SDCARD_SS_PIN;
+const char* filename = "/config.txt";
+Config config;
 int a0Counts = 0x0;
 int a1Counts = 0x0;
 int a2Counts = 0x0; 
@@ -74,19 +106,7 @@ double engineTempF[] = {
 uint64_t thisCanNAME;
 bool isFirstScan = true;
 byte claimedAddr = 0x2;
-union {
-	long val;
-	uint8_t bytes[4];
-} extendedPacketId;
-typedef struct {
-	byte priority;//0=Highest,7=Lowest
-	bool msgType;//0=ISO,1=NMEA2000
-	unsigned pgn;
-	byte sourceAddr;//Address of producing CA
-	byte desinationAddr;//Address of target CA
-	byte pf;//PF (byte 1)
-	byte ps;//PS (byte 2)
-}Extended_Id;
+
 
 // note: the _in array should have increasing values
 double multiMap(double val, double* _in, double* _out, uint8_t size)
@@ -105,6 +125,86 @@ double multiMap(double val, double* _in, double* _out, uint8_t size)
 
 	// interpolate in the right segment for the rest
 	return (val - _in[pos - 1]) * (_out[pos] - _out[pos - 1]) / (_in[pos] - _in[pos - 1]) + _out[pos - 1];
+}
+
+// Loads the configuration from a file
+void loadConfiguration(const char* filename, Config& config) {
+	// Open file for reading
+	File file = SD.open(filename);
+
+	// Allocate a temporary JsonDocument
+	// Don't forget to change the capacity to match your requirements.
+	// Use arduinojson.org/v6/assistant to compute the capacity.
+	StaticJsonDocument<512> doc;
+
+	// Deserialize the JSON document
+	DeserializationError error = deserializeJson(doc, file);
+	if (error)
+		Serial.println(F("Failed to read file, using default configuration"));
+
+	// Copy values from the JsonDocument to the Config
+	config.p_trim_min = doc["p_trim_min"] | 0;
+	config.p_trim_max = doc["p_trim_max"] | 4095;
+	config.s_trim_min = doc["s_trim_min"] | 0;
+	config.s_trim_max = doc["s_trim_max"] | 4095;
+	config.p_rudder = doc["p_rudder"] | 0;
+	config.s_rudder = doc["s_rudder"] | 4095;
+
+	// Close the file (Curiously, File's destructor doesn't close the file)
+	file.close();
+}
+
+// Saves the configuration to a file
+void saveConfiguration(const char* filename, const Config& config) {
+	// Delete existing file, otherwise the configuration is appended to the file
+	SD.remove(filename);
+
+	// Open file for writing
+	File file = SD.open(filename, FILE_WRITE);
+	if (!file) {
+		Serial.println(F("Failed to create file"));
+		return;
+	}
+
+	// Allocate a temporary JsonDocument
+	// Don't forget to change the capacity to match your requirements.
+	// Use arduinojson.org/assistant to compute the capacity.
+	StaticJsonDocument<512> doc;
+
+	// Set the values in the document
+	doc["p_trim_min"] = config.p_trim_min;
+	doc["p_trim_max"] = config.p_trim_max;
+	doc["s_trim_min"] = config.s_trim_min;
+	doc["s_trim_max"] = config.s_trim_max;
+	doc["p_rudder"] = config.p_rudder;
+	doc["s_rudder"] = config.s_rudder;
+
+	// Serialize JSON to file
+	if (serializeJson(doc, file) == 0) {
+		Serial.println(F("Failed to write to file"));
+	}
+
+	// Close the file
+	file.close();
+}
+
+// Prints the content of a file to the Serial
+void printFile(const char* filename) {
+	// Open file for reading
+	File file = SD.open(filename);
+	if (!file) {
+		Serial.println(F("Failed to read file"));
+		return;
+	}
+
+	// Extract each characters by one by one
+	while (file.available()) {
+		Serial.print((char)file.read());
+	}
+	Serial.println();
+
+	// Close the file
+	file.close();
 }
 
 //New message from CAN bus.
@@ -823,6 +923,10 @@ void updateLcd(){
 
  }
 
+//*************************************************************************************//
+//START OF ARDUINO RUNTIME CODE//
+//*************************************************************************************//
+
 // the setup function runs once when you press reset or power the board
 void setup(){
 	// initialize the lcd 
@@ -834,6 +938,28 @@ void setup(){
 	lcd.setCursor(1, 1);
 	lcd.print("BOOTING...");
 	delay(3000);
+
+	// Initialize serial port
+	Serial.begin(9600);
+	while (!Serial) continue;
+
+	// Initialize SD library
+	while (!SD.begin()) {
+		Serial.println(F("Failed to initialize SD library"));
+		delay(1000);
+	}
+
+	// Should load default config if run for the first time
+	Serial.println(F("Loading configuration..."));
+	loadConfiguration(filename, config);
+
+	// Create configuration file
+	Serial.println(F("Saving configuration..."));
+	saveConfiguration(filename, config);
+
+	// Dump config file
+	Serial.println(F("Print config file..."));
+	printFile(filename);
 
 	//Setup timer interrupt of 500 milliseconds
 	setupTc4Timer();
@@ -868,51 +994,12 @@ void setup(){
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-	int val1 = analogRead(A0);
-	delay(10);
-	int val2 = analogRead(A0);
-	delay(10);
-	int val3 = analogRead(A0);
-	delay(10);
-	int val4 = analogRead(A0);
-	delay(10);
-	int val5 = analogRead(A0);
-	delay(10);
-	int val6 = analogRead(A0);
-	delay(10);
-	int val7 = analogRead(A0);
-	delay(10);
-	int val8 = analogRead(A0);
-	delay(10);
-	int val9 = analogRead(A0);	
-	delay(10);
-	int val10 = analogRead(A0);
-	a0Counts = (val1 + val2 + val3 + val4 + val5 + val6 + val7 + val8 + val9 +val10) / 10;
-	//double valDouble = a0Counts;
-	int a0CountsMin = 1500;
-	int a0CountsMax = 1000;
-	bool invert = false;
-	if (a0Counts < a0CountsMin)
-		a0Counts = a0CountsMin;
-	if (a0Counts > a0CountsMax)
-		a0Counts = a0CountsMax;
-	if (a0CountsMin > a0CountsMax) {
-		int minTemp = a0CountsMax;
-		int maxTemp = a0CountsMin;
-		a0CountsMax = maxTemp;
-		a0CountsMin = minTemp;
-		invert = true;
+	//Port trim
+	readTrimInput(A0,stbdTrimPct,config.p_trim_min,config.p_trim_max);
 
+	//Stbd trim
+	readTrimInput(A1, portTrimPct, config.s_trim_min, config.s_trim_max);
 
-	}
-
-
-	double portTrimPctDouble = analogInputToPct(a0CountsMin, a0CountsMax, a0Counts, 0, 100);
-	if (invert)
-		portTrimPctDouble = 100.00 - portTrimPctDouble;
-
-	//double portTrimPctDouble = (valDouble / 4096) * 100;
-	portTrimPct = portTrimPctDouble;
 	//delay(500);
 	//double vInMin = 0.0;
 	//double vInMax = 3.3;
@@ -956,11 +1043,47 @@ void loop()
 	//delay(1000);
 }
 
+/// <summary>
+/// Reads an input that is measuring trim.
+/// </summary>
+/// <param name="input">Input to examine</param>
+/// <param name="trimPct">Trim reading 0-100%</param>
+/// <param name="countsMin">Input counts at 0% trim</param>
+/// <param name="countsMax">Input counts at 100% trim</param>
+void readTrimInput(uint8_t input, uint8_t &trimPct, int countsMin, int countsMax) {
+	int avg;
+	for (int i = 0; i < 10; i++) {
+		avg = avg + analogRead(input);
+		delay(10);
+	}
+	int counts = avg / 10;
+
+	//Limits
+	if (counts < countsMin)
+		counts = countsMin;
+	if (counts > countsMax)
+		counts = countsMax;
+	//Inverted (min > max)
+	bool invert = false;
+	if (countsMin > countsMax) {
+		int minTemp = countsMax;
+		int maxTemp = countsMin;
+		countsMax = maxTemp;
+		countsMin = minTemp;
+		invert = true;
+	}
+
+	//Convert input counts to percent trim
+	double pctDouble = analogInputToPct(countsMin, countsMax, counts, 0, 100);
+	if (invert)
+		pctDouble = 100.00 - pctDouble;
+	trimPct = pctDouble;
+}
+
 double analogInputToPct(int countsMin, int countsMax, int countsIn, double pctMin, double pctMax) {
 	double pctOut = (countsIn - countsMin) * ((pctMax - pctMin) / (countsMax - countsMin));
 	return pctOut;
 }
-
 
 double analogInputToVolts(int countsMin, int countsMax, int countsIn, double vMin, double vMax) {
 	double vOut = countsIn * ((vMax - vMin) / (countsMax - countsMin));
