@@ -19,12 +19,16 @@
 #include <ArduinoJson.h>
 
 typedef struct {
-	int p_trim_min;
-	int p_trim_max;
-	int s_trim_min;
-	int s_trim_max;
-	int p_rudder;
-	int s_rudder;
+	int p_trim_min_counts;
+	int p_trim_max_counts;
+	int s_trim_min_counts;
+	int s_trim_max_counts;
+	int p_rudder_counts;
+	float p_rudder_degrees;
+	int zero_rudder_counts;
+	float zero_rudder_degrees;
+	int s_rudder_counts;
+	float s_rudder_degrees;
 }Config;
 
 //Extended 29-bit CAN ID packet
@@ -177,13 +181,13 @@ void setup() {
 void loop()
 {
 	//Port trim
-	readTrimInput(A0, portTrimPct, config.p_trim_min, config.p_trim_max, portTrimCounts);
+	readTrimInput(A0, portTrimPct, config.p_trim_min_counts, config.p_trim_max_counts, portTrimCounts);
 
 	//Stbd trim
-	readTrimInput(A1, stbdTrimPct, config.s_trim_min, config.s_trim_max, stbdTrimCounts);
+	readTrimInput(A1, stbdTrimPct, config.s_trim_min_counts, config.s_trim_max_counts, stbdTrimCounts);
 
 	//Rudder
-	//TBD - needs to be a range of -45 deg to +45 deg
+	//TBD - needs to be a range of -45 deg port to +45 deg stbd
 }
 
 //***************************End of Arduino Code******************************
@@ -223,12 +227,16 @@ void loadConfiguration(const char* filename, Config& config) {
 		Serial.println(F("Failed to read file, using default configuration"));
 
 	// Copy values from the JsonDocument to the Config
-	config.p_trim_min = doc["p_trim_min"] | 0;
-	config.p_trim_max = doc["p_trim_max"] | 4095;
-	config.s_trim_min = doc["s_trim_min"] | 0;
-	config.s_trim_max = doc["s_trim_max"] | 4095;
-	config.p_rudder = doc["p_rudder"] | 0;
-	config.s_rudder = doc["s_rudder"] | 4095;
+	config.p_trim_min_counts = doc["p_trim_min_counts"] | 0;
+	config.p_trim_max_counts = doc["p_trim_max_counts"] | 4095;
+	config.s_trim_min_counts = doc["s_trim_min_counts"] | 0;
+	config.s_trim_max_counts = doc["s_trim_max_counts"] | 4095;
+	config.p_rudder_counts = doc["p_rudder_counts"] | 0;
+	config.p_rudder_degrees = doc["p_rudder_degrees"] | -35.0;
+	config.zero_rudder_counts = doc["zero_rudder_counts"] | 2047;
+	config.zero_rudder_degrees = doc["zero_rudder_degrees"] | 0.0;
+	config.s_rudder_counts = doc["s_rudder_counts"] | 4095;
+	config.s_rudder_degrees = doc["s_rudder_degrees"] | 35.0;
 
 	// Close the file (Curiously, File's destructor doesn't close the file)
 	file.close();
@@ -252,12 +260,16 @@ void saveConfiguration(const char* filename, const Config& config) {
 	StaticJsonDocument<512> doc;
 
 	// Set the values in the document
-	doc["p_trim_min"] = config.p_trim_min;
-	doc["p_trim_max"] = config.p_trim_max;
-	doc["s_trim_min"] = config.s_trim_min;
-	doc["s_trim_max"] = config.s_trim_max;
-	doc["p_rudder"] = config.p_rudder;
-	doc["s_rudder"] = config.s_rudder;
+	doc["p_trim_min_counts"] = config.p_trim_min_counts;
+	doc["p_trim_max_counts"] = config.p_trim_max_counts;
+	doc["s_trim_min_counts"] = config.s_trim_min_counts;
+	doc["s_trim_max_counts"] = config.s_trim_max_counts;
+	doc["p_rudder_counts"] = config.p_rudder_counts;
+	doc["p_rudder_degrees"] = config.p_rudder_degrees;
+	doc["zero_rudder_counts"] = config.zero_rudder_counts;
+	doc["zero_rudder_degrees"] = config.zero_rudder_degrees;
+	doc["s_rudder_counts"] = config.s_rudder_counts;
+	doc["s_rudder_degrees"] = config.s_rudder_degrees;
 
 	// Serialize JSON to file
 	if (serializeJson(doc, file) == 0) {
@@ -1033,6 +1045,16 @@ void readTrimInput(uint8_t input, uint8_t &trimPct, int countsMin, int countsMax
 	if (invert)
 		pctDouble = 100.00 - pctDouble;
 	trimPct = pctDouble;
+}
+
+void readRudderInput(uint8_t input, float& rudderRadians, int* countsMap, float* degreeMap, uint8_t& counts) {
+	int avg;
+	for (int i = 0; i < 10; i++) {
+		avg = avg + analogRead(input);
+		delay(10);
+	}
+	counts = avg / 10;
+	multiMap(counts,countsMap,)
 }
 
 double analogInputToPct(int countsMin, int countsMax, int countsIn, double pctMin, double pctMax) {
