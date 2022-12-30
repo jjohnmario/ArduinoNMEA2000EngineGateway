@@ -55,7 +55,11 @@ uint8_t portTrimCounts;
 uint8_t portTrimPct;
 uint8_t stbdTrimCounts;
 uint8_t stbdTrimPct;
-uint8_t rudderTrimCounts;
+uint8_t rudderCounts;
+float rudderDegrees;
+float rudderRadians;
+double rudderCountsMap[3];
+double rudderDegreesMap[3];
 uint8_t pgnTxDelayCtr;
 uint16_t addrClaimCtr;
 bool addrConflict = false;
@@ -66,52 +70,11 @@ uint32_t recievePgns[]{ 59392 ,59904, 60928 };
 uint32_t transmitPgns[]{0};
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 //VDO,12V,EU,0-10 Bar
-double oilPressSensorResistance[] = { 10.00,31.00,52.00,71.00,90.00,107.00,124.00,140.00,156.00,170.00,184.00 };
-double oilPressBar[] = { 0.00,1.00,2.00,3.00,4.00,5.00,6.00,7.00,8.00,9.00,10.00 };
-//VDO,12V,US,100 to 250F
-double engineTempSensorResistance[] = {
-	9.78,
-	14.15,
-	20.46,
-	29.60,
-	35.48,
-	50.61,
-	71.55,
-	99.00,
-	138.22,
-	199.00,
-	295.68,
-	447.15,
-	676.84,
-	1012.74,
-	1487.36,
-	2137.79,
-	3005.63 
-};
-double engineTempF[] = {
-	302.00,
-	284.00,
-	286.00,
-	248.00,
-	230.00,
-	212.00,
-	194.00,
-	176.00,
-	158.00,
-	140.00,
-	122.00,
-	104.00,
-	86.00,
-	68.00,
-	50.00,
-	32.00,
-	14.00 
-};
 uint64_t thisCanNAME;
 bool isFirstScan = true;
 byte claimedAddr = 0x2;
 
-//***************************Start of Arduino Code******************************
+//***************************Arduino Code***********************************
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -180,36 +143,23 @@ void setup() {
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-	//Port trim
-	readTrimInput(A0, portTrimPct, config.p_trim_min_counts, config.p_trim_max_counts, portTrimCounts);
+	//Port trim (0-100%)
+	portTrimPct = readTrimInput(A0, config.p_trim_min_counts, config.p_trim_max_counts, portTrimCounts);
 
-	//Stbd trim
-	readTrimInput(A1, stbdTrimPct, config.s_trim_min_counts, config.s_trim_max_counts, stbdTrimCounts);
+	//Stbd trim (0-100%)
+	stbdTrimPct = readTrimInput(A1, config.s_trim_min_counts, config.s_trim_max_counts, stbdTrimCounts);
 
-	//Rudder
-	//TBD - needs to be a range of -45 deg port to +45 deg stbd
+	//Rudder (-45 to +45 degrees)
+	rudderDegrees = readRudderInput(A2,rudderCountsMap,rudderDegreesMap);
+	//1 Radian = 57.2957795 degrees
+	rudderRadians = rudderDegrees * (1 / 57.2957795);
 }
 
-//***************************End of Arduino Code******************************
+//***************************************************************************
 
-// note: the _in array should have increasing values
-double multiMap(double val, double* _in, double* _out, uint8_t size)
-{
-	// take care the value is within range
-	// val = constrain(val, _in[0], _in[size-1]);
-	if (val <= _in[0]) return _out[0];
-	if (val >= _in[size - 1]) return _out[size - 1];
 
-	// search right interval
-	uint8_t pos = 1;  // _in[0] allready tested
-	while (val > _in[pos]) pos++;
 
-	// this will handle all exact "points" in the _in array
-	if (val == _in[pos]) return _out[pos];
-
-	// interpolate in the right segment for the rest
-	return (val - _in[pos - 1]) * (_out[pos] - _out[pos - 1]) / (_in[pos] - _in[pos - 1]) + _out[pos - 1];
-}
+//***************************Configuration**********************************
 
 // Loads the configuration from a file
 void loadConfiguration(const char* filename, Config& config) {
@@ -232,11 +182,19 @@ void loadConfiguration(const char* filename, Config& config) {
 	config.s_trim_min_counts = doc["s_trim_min_counts"] | 0;
 	config.s_trim_max_counts = doc["s_trim_max_counts"] | 4095;
 	config.p_rudder_counts = doc["p_rudder_counts"] | 0;
-	config.p_rudder_degrees = doc["p_rudder_degrees"] | -35.0;
+	config.p_rudder_degrees = doc["p_rudder_degrees"] | -45.0;
 	config.zero_rudder_counts = doc["zero_rudder_counts"] | 2047;
 	config.zero_rudder_degrees = doc["zero_rudder_degrees"] | 0.0;
 	config.s_rudder_counts = doc["s_rudder_counts"] | 4095;
-	config.s_rudder_degrees = doc["s_rudder_degrees"] | 35.0;
+	config.s_rudder_degrees = doc["s_rudder_degrees"] | 45.0;
+
+	//Create map arrays for rudder angle and rudder counts
+	rudderCountsMap[0] = config.p_rudder_counts;
+	rudderCountsMap[1] = config.zero_rudder_counts;
+	rudderCountsMap[2] = config.s_rudder_counts;
+	rudderDegreesMap[0] = config.p_rudder_degrees;
+	rudderDegreesMap[1] = config.zero_rudder_degrees;
+	rudderDegreesMap[2] = config.s_rudder_degrees;
 
 	// Close the file (Curiously, File's destructor doesn't close the file)
 	file.close();
@@ -298,6 +256,12 @@ void printFile(const char* filename) {
 	// Close the file
 	file.close();
 }
+
+//***************************************************************************
+
+
+
+//***************************NMEA2000****************************************
 
 //Creates CAN device NAME
 uint64_t createDeviceName(uint32_t mfrCode, uint32_t serial, uint8_t funcInst,
@@ -378,7 +342,7 @@ void onCanRecieved(int size) {
 		if (sizeof(extendedPacketId.bytes) == 4) {
 			Extended_Id extId;
 			extId = parseCanExtendedId(extendedPacketId.bytes);
-			
+
 			//Read up to 8 bytes of data 
 			int dataLen = CAN.available();
 			uint8_t data[8];
@@ -405,25 +369,25 @@ void processN2kMsg(Extended_Id extId, byte* data)
 
 		//Requested PGNs
 		switch (reqPgn) {
-			
-			case 60928: { //ISO Address Claim
-				writePgn60928(255);
-				Serial.print("PGN: 60928 sent to bus address:");
-				Serial.println(255);
-				break;
-			}
-			case 126996: {//Product Information
-				writePgn126996(255);
-				Serial.print("PGN: 126996 sent to bus address:");
-				Serial.println(255);
-				break;
-			}
-			case 126464: { //PGN List
-				writePgn126464(extId.sourceAddr);
-				Serial.print("PGN: 126494 sent to bus address:");
-				Serial.println(extId.sourceAddr);
-				break;
-			}
+
+		case 60928: { //ISO Address Claim
+			writePgn60928(255);
+			Serial.print("PGN: 60928 sent to bus address:");
+			Serial.println(255);
+			break;
+		}
+		case 126996: {//Product Information
+			writePgn126996(255);
+			Serial.print("PGN: 126996 sent to bus address:");
+			Serial.println(255);
+			break;
+		}
+		case 126464: { //PGN List
+			writePgn126464(extId.sourceAddr);
+			Serial.print("PGN: 126494 sent to bus address:");
+			Serial.println(extId.sourceAddr);
+			break;
+		}
 		}
 	}
 	//ISO Address Claim 60928
@@ -533,7 +497,7 @@ void writePgn126464(byte destAddr) {
 	id = (id << 8) + 0xEE;
 	id = (id << 8) + 0x00;
 	id = (id << 8) + (claimedAddr);
-	
+
 	//Transmit PGNs
 	//Fast packet 1
 	CAN.beginExtendedPacket(id);
@@ -602,16 +566,16 @@ void writePgn126996(byte destAddr) {
 	prodCode[0] = 0xD2;
 	char modId[32] = { '/0' };
 	String modIdStr = "Marioware Rudder/Trim Module";
-	modIdStr.toCharArray(modId, modIdStr.length()+1, 0);
-	char swVer[32] = {'/0'};
+	modIdStr.toCharArray(modId, modIdStr.length() + 1, 0);
+	char swVer[32] = { '/0' };
 	String swVerStr = "1.0.0.0 (2022-12-02)";
-	swVerStr.toCharArray(swVer, swVerStr.length()+1, 0);
+	swVerStr.toCharArray(swVer, swVerStr.length() + 1, 0);
 	char modVer[32] = { '/0' };
 	String modVerStr = "1.0.0.0 (2022-12-02)";
-	modVerStr.toCharArray(modVer, modVerStr.length()+1, 0);
+	modVerStr.toCharArray(modVer, modVerStr.length() + 1, 0);
 	char modSer[32] = { '/0' };
 	String modSerStr = "00000001";
-	modSerStr.toCharArray(modSer, modSerStr.length()+1, 0);
+	modSerStr.toCharArray(modSer, modSerStr.length() + 1, 0);
 	uint8_t certLvl = 0;
 	uint8_t loadEqv = 2;
 
@@ -895,15 +859,19 @@ void writePgn127245(byte destAddr) {
 	CAN.write(0x0);//Direction order
 	CAN.write(0x0);//Angle order
 	CAN.write(0x0);
-	CAN.write(0x5C);//Postion in radians/10000 (example 13/10000 = 0.0013)
-	CAN.write(0x3D);
-	CAN.write(0xFF);
-	CAN.write(0xFF);
+	//Postion in radians*10000 (example 0.0013rad * 10000 = 13)
+	int rudderRadx1000 = rudderRadians * 10000;
+	byte bytes[sizeof(int)];
+	*(int*)(bytes) = rudderRadx1000;
+	CAN.write(bytes[3]);//Postion in radians*10000
+	CAN.write(bytes[2]);
+	CAN.write(bytes[1]);
+	CAN.write(bytes[0]);
 	CAN.endPacket();
 }
 
 //Small Craft Status (Trim Tabs)
-void writePgn130576(byte destAddr){
+void writePgn130576(byte destAddr) {
 
 	// 0-100%, 0% = tabs fully up, 100% = tabs fully down
 	//Create packet ID
@@ -913,7 +881,7 @@ void writePgn130576(byte destAddr){
 	id = (id << 8) + (claimedAddr);
 	CAN.beginExtendedPacket(id);
 	//TEST CODE
-	
+
 
 	Serial.println(portTrimPct);
 	//if (portTrimPct < 100)
@@ -935,6 +903,32 @@ void writePgn130576(byte destAddr){
 	CAN.write(0xFF);
 	CAN.write(0xFF);
 	CAN.endPacket();
+}
+
+//PGN Tx and Address Claim Timer Handler
+void TC4_Handler() {                                         // Interrupt Service Routine (ISR) for timer TC4
+	if (TC4->COUNT16.INTFLAG.bit.OVF && TC4->COUNT16.INTENSET.bit.OVF)       // Optionally check for overflow (OVF) interrupt      
+	{
+		PORT->Group[PORTA].OUTTGL.reg = PORT_PA21;             // Toggle the D7 output
+		TC4->COUNT16.INTFLAG.reg = TC_INTFLAG_OVF;             // Clear the OVF interrupt flag
+
+		//PGN Tx delay interval 500 ms (5ms x 100)
+		if (pgnTxDelayCtr < 100)
+			pgnTxDelayCtr++;
+		else {
+			//500ms since last address claim conflict which implies the conflict has been resolved.
+			if (addrClaimCtr >= 1000) {
+				{
+					updateLcd();
+					writePgn127245(255);
+					writePgn130576(255);
+					pgnTxDelayCtr = 0;
+				}
+			}
+		}
+		if (addrClaimCtr < 1000)
+			addrClaimCtr++;
+	}
 }
 
 // Set timer TC4 to call the TC4_Handler every 5ms: (8 * (29999 + 1)) / 48MHz = 5ms
@@ -964,50 +958,12 @@ void setupTc4Timer() {
 	while (TC4->COUNT16.STATUS.bit.SYNCBUSY);                // Wait for synchronization
 }
 
-//PGN Tx and Address Claim Timer Handler
-void TC4_Handler() {                                         // Interrupt Service Routine (ISR) for timer TC4
-	if (TC4->COUNT16.INTFLAG.bit.OVF && TC4->COUNT16.INTENSET.bit.OVF)       // Optionally check for overflow (OVF) interrupt      
-	{
-		PORT->Group[PORTA].OUTTGL.reg = PORT_PA21;             // Toggle the D7 output
-		TC4->COUNT16.INTFLAG.reg = TC_INTFLAG_OVF;             // Clear the OVF interrupt flag
+//**************************************************************************
 
-		//PGN Tx delay interval 500 ms (5ms x 100)
-		if (pgnTxDelayCtr < 100)
-			pgnTxDelayCtr++;
-		else {
-			//500ms since last address claim conflict which implies the conflict has been resolved.
-			if (addrClaimCtr >= 1000) {
-				{
-					updateLcd();
-					writePgn127245(255);
-					writePgn130576(255);
-					pgnTxDelayCtr = 0;
-				}
-			}
-		}	
-		if (addrClaimCtr < 1000)
-			addrClaimCtr++;
-	}
-}
 
-void updateLcd(){
-	lcd.clear();
-	//Port trim
-	lcd.setCursor(0, 0);
-	lcd.print("PT:");
-	lcd.print(portTrimCounts);
 
-	//Rudder
-	lcd.setCursor(8, 0);
-	lcd.print("RDR:");
-	lcd.print(stbdTrimCounts);
 
-	//Stbd trim
-	lcd.setCursor(0, 1);
-	lcd.print("ST:");
-	lcd.print(rudderTrimCounts);
-
- }
+//***************************Inputs/Scaling**********************************
 
 /// <summary>
 /// Reads an input that is measuring trim.
@@ -1016,7 +972,7 @@ void updateLcd(){
 /// <param name="trimPct">Trim reading 0-100%</param>
 /// <param name="countsMin">Input counts at 0% trim</param>
 /// <param name="countsMax">Input counts at 100% trim</param>
-void readTrimInput(uint8_t input, uint8_t &trimPct, int countsMin, int countsMax, uint8_t &counts) {
+uint8_t readTrimInput(uint8_t input, int countsMin, int countsMax, uint8_t counts) {
 	int avg;
 	for (int i = 0; i < 10; i++) {
 		avg = avg + analogRead(input);
@@ -1044,17 +1000,19 @@ void readTrimInput(uint8_t input, uint8_t &trimPct, int countsMin, int countsMax
 	double pctDouble = analogInputToPct(countsMin, countsMax, counts, 0, 100);
 	if (invert)
 		pctDouble = 100.00 - pctDouble;
-	trimPct = pctDouble;
+	return pctDouble;
+	//trimPct = pctDouble;
 }
 
-void readRudderInput(uint8_t input, float& rudderRadians, int* countsMap, float* degreeMap, uint8_t& counts) {
+double readRudderInput(uint8_t input, double* countsMap, double* degreeMap) {
 	int avg;
 	for (int i = 0; i < 10; i++) {
 		avg = avg + analogRead(input);
 		delay(10);
 	}
-	counts = avg / 10;
-	multiMap(counts,countsMap,)
+	uint8_t counts = avg / 10; 
+	int size = sizeof(countsMap) / sizeof(int);
+	return multiMap(counts, countsMap, degreeMap, size);
 }
 
 double analogInputToPct(int countsMin, int countsMax, int countsIn, double pctMin, double pctMax) {
@@ -1087,10 +1045,53 @@ double voltageToResistance(int countsMin, int countsMax, int countsIn, double vM
 	//0.0024390 volts per ohm of resistance
 	// 3.3 volts/
 	// Convert the analog reading counts (which goes from minCounts to maxCounts) to a voltage (vMin to vMax):
-	float vOut = countsIn * ((vMax-vMin) / (countsMax - countsMin));
+	float vOut = countsIn * ((vMax - vMin) / (countsMax - countsMin));
 	Serial.println(vOut);
 	// Find the resistance of R2. R2 = Vout*R1/Vin-Vout
-	float r2 = vOut * r1 / ((vMax-vMin) - vOut);
+	float r2 = vOut * r1 / ((vMax - vMin) - vOut);
 	return r2;
 }
+
+// note: the _in array should have increasing values
+double multiMap(double val, double* _in, double* _out, uint8_t size)
+{
+	// take care the value is within range
+	// val = constrain(val, _in[0], _in[size-1]);
+	if (val <= _in[0]) return _out[0];
+	if (val >= _in[size - 1]) return _out[size - 1];
+
+	// search right interval
+	uint8_t pos = 1;  // _in[0] allready tested
+	while (val > _in[pos]) pos++;
+
+	// this will handle all exact "points" in the _in array
+	if (val == _in[pos]) return _out[pos];
+
+	// interpolate in the right segment for the rest
+	return (val - _in[pos - 1]) * (_out[pos] - _out[pos - 1]) / (_in[pos] - _in[pos - 1]) + _out[pos - 1];
+}
+
+//***************************************************************************
+
+
+void updateLcd(){
+	lcd.clear();
+	//Port trim
+	lcd.setCursor(0, 0);
+	lcd.print("PT:");
+	lcd.print(portTrimCounts);
+
+	//Rudder
+	lcd.setCursor(8, 0);
+	lcd.print("RDR:");
+	lcd.print(stbdTrimCounts);
+
+	//Stbd trim
+	lcd.setCursor(0, 1);
+	lcd.print("ST:");
+	lcd.print(rudderCounts);
+
+ }
+
+
 

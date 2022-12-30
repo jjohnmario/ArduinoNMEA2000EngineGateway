@@ -6,7 +6,7 @@
 			All non-arduino files created by visual micro and all visual studio project or solution files can be freely deleted and are not required to compile a sketch (do not delete your own code!).
 			Note: debugger breakpoints are stored in '.sln' or '.asln' files, knowledge of last uploaded breakpoints is stored in the upload.vmps.xml file. Both files are required to continue a previous debug session without needing to compile and upload again
 	
-	Hardware: Arduino MKRZERO                                                                                                              (mkrzero), Platform=samd, Package=arduino
+	Hardware: Arduino MKRZERO(mkrzero), Platform=samd, Package=arduino
 */
 
 #if defined(_VMICRO_INTELLISENSE)
@@ -72,13 +72,14 @@ typedef int __builtin_bswap16;
 #include "samd.h"
 //#include "samd21/include/samd21.h"
 
-extern void* malloc(size_t __size); 
+extern void* malloc(size_t __size);
 
 class VM_DBG {
 public:
 	// Send a Message to the Serial Monitor via WiFi Connection 
 	void sendUserMessage(const char* theMessage) {};
 } MicroDebug;
+
 #include <arduino.h>
 #include <pins_arduino.h> 
 #include <variant.h> 
@@ -90,8 +91,8 @@ extern double cos(double);
 extern double sin(double);
 extern double tan(double);
 extern double tanh(double);
-extern double frexp(double, int *);
-extern double modf(double, double *);
+extern double frexp(double, int*);
+extern double modf(double, double*);
 extern double ceil(double);
 extern double fabs(double);
 extern double floor(double);
@@ -122,7 +123,7 @@ extern int __signbitf(float x);
 extern int __signbitd(double x);
 extern int finitel(long double);
 extern double infinity(void);
-extern double nan(const char *);
+extern double nan(const char*);
 extern int finite(double);
 extern double copysign(double, double);
 extern double logb(double);
@@ -143,7 +144,7 @@ extern long long int llrint(double);
 extern long int lround(double);
 extern long long int llround(double);
 extern double trunc(double);
-extern double remquo(double, double, int *);
+extern double remquo(double, double, int*);
 extern double fdim(double, double);
 extern double fmax(double, double);
 extern double fmin(double, double);
@@ -172,8 +173,8 @@ extern float cosf(float);
 extern float sinf(float);
 extern float tanf(float);
 extern float tanhf(float);
-extern float frexpf(float, int *);
-extern float modff(float, float *);
+extern float frexpf(float, int*);
+extern float modff(float, float*);
 extern float ceilf(float);
 extern float fabsf(float);
 extern float floorf(float);
@@ -203,14 +204,14 @@ extern float roundf(float);
 extern long int lroundf(float);
 extern long long int llroundf(float);
 extern float truncf(float);
-extern float remquof(float, float, int *);
+extern float remquof(float, float, int*);
 extern float fdimf(float, float);
 extern float fmaxf(float, float);
 extern float fminf(float, float);
 extern float fmaf(float, float, float);
 
 extern float infinityf(void);
-extern float nanf(const char *);
+extern float nanf(const char*);
 extern int finitef(float);
 extern float copysignf(float, float);
 extern float logbf(float);
@@ -237,9 +238,9 @@ extern float hypotf(float, float);
 #endif 
 
 extern double drem(double, double);
-extern void sincos(double, double *, double *);
-extern double gamma_r(double, int *);
-extern double lgamma_r(double, int *);
+extern void sincos(double, double*, double*);
+extern double gamma_r(double, int*);
+extern double lgamma_r(double, int*);
 
 extern double y0(double);
 extern double y1(double);
@@ -249,9 +250,9 @@ extern double j1(double);
 extern double jn(int, double);
 
 extern float dremf(float, float);
-extern void sincosf(float, float *, float *);
-extern float gammaf_r(float, int *);
-extern float lgammaf_r(float, int *);
+extern void sincosf(float, float*, float*);
+extern float gammaf_r(float, int*);
+extern float lgammaf_r(float, int*);
 
 extern float y0f(float);
 extern float y1f(float);
@@ -287,27 +288,27 @@ _PTR memset(_PTR, int, size_t)
 	return 0;
 }
 
-char 	strcat(char *, const char *) {
+char 	strcat(char*, const char*) {
 	return 0;
 }
 
-char 	strchr(const char *, int) {
+char 	strchr(const char*, int) {
 	return 0;
 }
 
-int	 strcmp(const char *, const char *) {
+int	 strcmp(const char*, const char*) {
 	return 0;
 }
 
-int	 strcoll(const char *, const char *) {
+int	 strcoll(const char*, const char*) {
 	return 0;
 }
 
-char* strcpy(char *, const char *) {
+char* strcpy(char*, const char*) {
 	return 0;
 }
 
-size_t	 strcspn(const char *, const char *) {
+size_t	 strcspn(const char*, const char*) {
 	return 0;
 }
 
@@ -315,70 +316,70 @@ char* strerror(int) {
 	return 0;
 }
 
-size_t	 strlen(const char *) {
+size_t	 strlen(const char*) {
 	return 0;
 }
 
-char* strncat(char *, const char *, size_t) {
+char* strncat(char*, const char*, size_t) {
 	return 0;
 }
 
-int	 strncmp(const char *, const char *, size_t) {
+int	 strncmp(const char*, const char*, size_t) {
 	return 0;
 }
 
-char* strncpy(char *, const char *, size_t) {
+char* strncpy(char*, const char*, size_t) {
 	return 0;
 }
 
-char* strpbrk(const char *, const char *) {
+char* strpbrk(const char*, const char*) {
 	return 0;
 }
 
-char* strrchr(const char *, int) {
+char* strrchr(const char*, int) {
 	return 0;
 }
 
-size_t	 strspn(const char *, const char *) {
+size_t	 strspn(const char*, const char*) {
 	return 0;
 }
 
-char* strstr(const char *, const char *) {
+char* strstr(const char*, const char*) {
 	return 0;
 }
 
 
 #ifndef _REENT_ONLY
-char* strtok(char *, const char *) {
+char* strtok(char*, const char*) {
 	return 0;
 }
 #endif
 
-size_t	 strxfrm(char *, const char *, size_t) {
+size_t	 strxfrm(char*, const char*, size_t) {
 	return 0;
 }
 
 
 #ifndef __STRICT_ANSI__
-char 	*strtok_r(char *, const char *, char **) {
+char* strtok_r(char*, const char*, char**) {
 	return 0;
 }
 
 
-int	 bcmp(const void *, const void *, size_t) {
+int	 bcmp(const void*, const void*, size_t) {
 	return 0;
 }
 
-void	 bcopy(const void *, void *, size_t) {
+void	 bcopy(const void*, void*, size_t) {
 
 }
 
-void	 bzero(void *, size_t) {
+void	 bzero(void*, size_t) {
 
 }
 
 
-char 	*index(const char *, int) {
+char* index(const char*, int) {
 	return 0;
 }
 
@@ -402,27 +403,27 @@ _PTR 	 rawmemchr(const _PTR, int) {
 	return 0;
 }
 
-char 	*rindex(const char *, int) {
+char* rindex(const char*, int) {
 	return 0;
 }
 
-char 	*stpcpy(char *, const char *) {
+char* stpcpy(char*, const char*) {
 	return 0;
 }
 
-char 	*stpncpy(char *, const char *, size_t) {
+char* stpncpy(char*, const char*, size_t) {
 	return 0;
 }
 
-int	 strcasecmp(const char *, const char *) {
+int	 strcasecmp(const char*, const char*) {
 	return 0;
 }
 
-char	*strcasestr(const char *, const char *) {
+char* strcasestr(const char*, const char*) {
 	return 0;
 }
 
-char 	*strchrnul(const char *, int) {
+char* strchrnul(const char*, int) {
 	return 0;
 }
 
@@ -430,19 +431,19 @@ int snprintf(char*, size_t, const char*, ...) {
 	return 0;
 }
 
-int sprintf(char *, const char*, ...) {
+int sprintf(char*, const char*, ...) {
 	return 0;
 }
 
-int fprintf(const char *, ...) {
+int fprintf(const char*, ...) {
 	return 0;
 }
 
-int printf(const char *, ...) {
+int printf(const char*, ...) {
 	return 0;
 }
 #endif
 
-#include "ArduinoNMEA2000EngineGateway.ino"
+#include "..\ArduinoNMEA2000EngineGateway.ino"
 #endif
 #endif
