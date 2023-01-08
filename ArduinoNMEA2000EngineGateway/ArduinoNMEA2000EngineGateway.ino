@@ -69,7 +69,6 @@ unsigned long lastMillis;
 uint32_t recievePgns[]{ 59392 ,59904, 60928 };
 uint32_t transmitPgns[]{0};
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-//VDO,12V,EU,0-10 Bar
 uint64_t thisCanNAME;
 bool isFirstScan = true;
 byte claimedAddr = 0x2;
@@ -151,6 +150,7 @@ void loop()
 
 	//Rudder (-45 to +45 degrees)
 	rudderDegrees = readRudderInput(A2,rudderCountsMap,rudderDegreesMap);
+
 	//1 Radian = 57.2957795 degrees
 	rudderRadians = rudderDegrees * (1 / 57.2957795);
 }
@@ -863,10 +863,10 @@ void writePgn127245(byte destAddr) {
 	int rudderRadx1000 = rudderRadians * 10000;
 	byte bytes[sizeof(int)];
 	*(int*)(bytes) = rudderRadx1000;
-	CAN.write(bytes[3]);//Postion in radians*10000
-	CAN.write(bytes[2]);
+	CAN.write(bytes[0]);//Postion in radians*10000
 	CAN.write(bytes[1]);
-	CAN.write(bytes[0]);
+	CAN.write(bytes[2]);
+	CAN.write(bytes[3]);
 	CAN.endPacket();
 }
 
@@ -880,10 +880,7 @@ void writePgn130576(byte destAddr) {
 	id = (id << 8) + 0x10;
 	id = (id << 8) + (claimedAddr);
 	CAN.beginExtendedPacket(id);
-	//TEST CODE
 
-
-	Serial.println(portTrimPct);
 	//if (portTrimPct < 100)
 	//	portTrimPct++;
 	//else
@@ -1005,13 +1002,17 @@ uint8_t readTrimInput(uint8_t input, int countsMin, int countsMax, uint8_t count
 }
 
 double readRudderInput(uint8_t input, double* countsMap, double* degreeMap) {
-	int avg;
-	for (int i = 0; i < 10; i++) {
-		avg = avg + analogRead(input);
-		delay(10);
-	}
-	uint8_t counts = avg / 10; 
-	int size = sizeof(countsMap) / sizeof(int);
+	//int avg;
+	//for (int i = 0; i < 10; i++) {
+	//	avg = avg + analogRead(input);
+	//	//Serial.println(avg);
+	//	delay(10);
+	//}
+	////int foo = avg / 10;
+	//int counts = avg / 10; 
+	//uint8_t counts = analogRead(input);
+	int counts = analogRead(input);
+	int size = 3;
 	return multiMap(counts, countsMap, degreeMap, size);
 }
 
@@ -1073,24 +1074,22 @@ double multiMap(double val, double* _in, double* _out, uint8_t size)
 
 //***************************************************************************
 
-
 void updateLcd(){
-	lcd.clear();
-	//Port trim
-	lcd.setCursor(0, 0);
-	lcd.print("PT:");
-	lcd.print(portTrimCounts);
+	//lcd.clear();
+	////Port trim
+	//lcd.setCursor(0, 0);
+	//lcd.print("PT:");
+	//lcd.print(analogRead(A0));
 
-	//Rudder
-	lcd.setCursor(8, 0);
-	lcd.print("RDR:");
-	lcd.print(stbdTrimCounts);
+	////Stbd trim
+	//lcd.setCursor(0, 1);
+	//lcd.print("ST:");
+	//lcd.print(analogRead(A1));
 
-	//Stbd trim
-	lcd.setCursor(0, 1);
-	lcd.print("ST:");
-	lcd.print(rudderCounts);
-
+	////Rudder
+	//lcd.setCursor(8, 0);
+	//lcd.print("RDR:");
+	//lcd.print(analogRead(A2));
  }
 
 
