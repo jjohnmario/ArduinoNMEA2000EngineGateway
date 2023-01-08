@@ -143,12 +143,15 @@ void setup() {
 void loop()
 {
 	//Port trim (0-100%)
+	portTrimCounts = analogRead(A0);
 	portTrimPct = readTrimInput(A0, config.p_trim_min_counts, config.p_trim_max_counts, portTrimCounts);
 
 	//Stbd trim (0-100%)
+	stbdTrimCounts = analogRead(A1);
 	stbdTrimPct = readTrimInput(A1, config.s_trim_min_counts, config.s_trim_max_counts, stbdTrimCounts);
 
 	//Rudder (-45 to +45 degrees)
+	rudderCounts = analogRead(A2);
 	rudderDegrees = readRudderInput(A2,rudderCountsMap,rudderDegreesMap);
 
 	//1 Radian = 57.2957795 degrees
@@ -1079,17 +1082,17 @@ void updateLcd(){
 	////Port trim
 	//lcd.setCursor(0, 0);
 	//lcd.print("PT:");
-	//lcd.print(analogRead(A0));
+	//lcd.print(portTrimCounts);
 
 	////Stbd trim
 	//lcd.setCursor(0, 1);
 	//lcd.print("ST:");
-	//lcd.print(analogRead(A1));
+	//lcd.print(stbdTrimCounts);
 
 	////Rudder
 	//lcd.setCursor(8, 0);
 	//lcd.print("RDR:");
-	//lcd.print(analogRead(A2));
+	//lcd.print(rudderCounts);
  }
 
 
