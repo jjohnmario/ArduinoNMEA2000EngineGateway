@@ -51,11 +51,11 @@ typedef struct {
 const int chipSelect = SDCARD_SS_PIN;
 const char* filename = "/config.txt";
 Config config;
-uint8_t portTrimCounts;
+int portTrimCounts;
 uint8_t portTrimPct;
-uint8_t stbdTrimCounts;
+int stbdTrimCounts;
 uint8_t stbdTrimPct;
-uint8_t rudderCounts;
+int rudderCounts;
 float rudderDegrees;
 float rudderRadians;
 double rudderCountsMap[3];
@@ -129,6 +129,24 @@ void setup() {
 		lcd.print("NMEA2000 ONLINE!");
 	}
 
+	delay(3000);
+	//Setup LCD to display input counts
+	lcd.clear();
+	//Port trim
+	lcd.setCursor(0, 0);
+	lcd.print("PT:");
+	//lcd.print(portTrimCounts);
+
+	//Stbd trim
+	lcd.setCursor(0, 1);
+	lcd.print("ST:");
+	//lcd.print(stbdTrimCounts);
+
+	//Rudder
+	lcd.setCursor(8, 0);
+	lcd.print("RDR:");
+	//lcd.print(rudderCounts);
+
 	//Subscribe to new CAN messages
 	CAN.onReceive(onCanRecieved);
 
@@ -144,17 +162,15 @@ void loop()
 {
 	//Port trim (0-100%)
 	portTrimCounts = analogRead(A0);
-	portTrimPct = readTrimInput(A0, config.p_trim_min_counts, config.p_trim_max_counts, portTrimCounts);
+	portTrimPct = readTrimInput(portTrimCounts, config.p_trim_min_counts, config.p_trim_max_counts);
 
 	//Stbd trim (0-100%)
 	stbdTrimCounts = analogRead(A1);
-	stbdTrimPct = readTrimInput(A1, config.s_trim_min_counts, config.s_trim_max_counts, stbdTrimCounts);
+	stbdTrimPct = readTrimInput(stbdTrimCounts, config.s_trim_min_counts, config.s_trim_max_counts);
 
 	//Rudder (-45 to +45 degrees)
 	rudderCounts = analogRead(A2);
-	rudderDegrees = readRudderInput(A2,rudderCountsMap,rudderDegreesMap);
-
-	//1 Radian = 57.2957795 degrees
+	rudderDegrees = readRudderInput(rudderCounts,rudderCountsMap,rudderDegreesMap);
 	rudderRadians = rudderDegrees * (1 / 57.2957795);
 }
 
@@ -972,13 +988,7 @@ void setupTc4Timer() {
 /// <param name="trimPct">Trim reading 0-100%</param>
 /// <param name="countsMin">Input counts at 0% trim</param>
 /// <param name="countsMax">Input counts at 100% trim</param>
-uint8_t readTrimInput(uint8_t input, int countsMin, int countsMax, uint8_t counts) {
-	int avg;
-	for (int i = 0; i < 10; i++) {
-		avg = avg + analogRead(input);
-		delay(10);
-	}
-	counts = avg / 10;
+uint8_t readTrimInput(int counts, int countsMin, int countsMax) {
 
 	//Limits
 	if (counts < countsMin)
@@ -1001,20 +1011,9 @@ uint8_t readTrimInput(uint8_t input, int countsMin, int countsMax, uint8_t count
 	if (invert)
 		pctDouble = 100.00 - pctDouble;
 	return pctDouble;
-	//trimPct = pctDouble;
 }
 
-double readRudderInput(uint8_t input, double* countsMap, double* degreeMap) {
-	//int avg;
-	//for (int i = 0; i < 10; i++) {
-	//	avg = avg + analogRead(input);
-	//	//Serial.println(avg);
-	//	delay(10);
-	//}
-	////int foo = avg / 10;
-	//int counts = avg / 10; 
-	//uint8_t counts = analogRead(input);
-	int counts = analogRead(input);
+double readRudderInput(int counts, double* countsMap, double* degreeMap) {
 	int size = 3;
 	return multiMap(counts, countsMap, degreeMap, size);
 }
@@ -1078,21 +1077,23 @@ double multiMap(double val, double* _in, double* _out, uint8_t size)
 //***************************************************************************
 
 void updateLcd(){
-	//lcd.clear();
-	////Port trim
-	//lcd.setCursor(0, 0);
-	//lcd.print("PT:");
-	//lcd.print(portTrimCounts);
+	//Port trim
+	lcd.setCursor(3, 0);
+	lcd.print("    ");
+	lcd.setCursor(3, 0);
+	lcd.print(portTrimCounts);
 
-	////Stbd trim
-	//lcd.setCursor(0, 1);
-	//lcd.print("ST:");
-	//lcd.print(stbdTrimCounts);
+	//Stbd trim
+	lcd.setCursor(3, 1);
+	lcd.print("    ");
+	lcd.setCursor(3, 1);
+	lcd.print(stbdTrimCounts);
 
-	////Rudder
-	//lcd.setCursor(8, 0);
-	//lcd.print("RDR:");
-	//lcd.print(rudderCounts);
+	//Rudder
+	lcd.setCursor(12, 0);
+	lcd.print("    ");
+	lcd.setCursor(12, 0);
+	lcd.print(rudderCounts);
  }
 
 
