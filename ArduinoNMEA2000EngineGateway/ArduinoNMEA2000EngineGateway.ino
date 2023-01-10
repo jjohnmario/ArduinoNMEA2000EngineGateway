@@ -89,7 +89,6 @@ void setup() {
 
 	// Initialize serial port
 	Serial.begin(9600);
-	while (!Serial) continue;
 
 	// Initialize SD library
 	while (!SD.begin()) {
@@ -130,22 +129,21 @@ void setup() {
 	}
 
 	delay(3000);
+
 	//Setup LCD to display input counts
 	lcd.clear();
+
 	//Port trim
 	lcd.setCursor(0, 0);
 	lcd.print("PT:");
-	//lcd.print(portTrimCounts);
 
 	//Stbd trim
 	lcd.setCursor(0, 1);
 	lcd.print("ST:");
-	//lcd.print(stbdTrimCounts);
 
 	//Rudder
 	lcd.setCursor(8, 0);
 	lcd.print("RDR:");
-	//lcd.print(rudderCounts);
 
 	//Subscribe to new CAN messages
 	CAN.onReceive(onCanRecieved);
