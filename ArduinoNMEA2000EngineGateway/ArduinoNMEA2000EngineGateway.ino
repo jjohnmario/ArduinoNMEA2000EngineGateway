@@ -159,19 +159,17 @@ void setup() {
 void loop()
 {
 	//Port trim (0-100%)
-	portTrimCounts = smoothInput(A0, 150);
+	portTrimCounts = smoothInput(A0, 2);
 	portTrimPct = readTrimInput(portTrimCounts, config.p_trim_min_counts, config.p_trim_max_counts);
 
 	//Stbd trim (0-100%)
-	stbdTrimCounts = smoothInput(A1, 150);
+	stbdTrimCounts = smoothInput(A1, 2);
 	stbdTrimPct = readTrimInput(stbdTrimCounts, config.s_trim_min_counts, config.s_trim_max_counts);
 
 	//Rudder (-45 to +45 degrees)
-	rudderCounts = smoothInput(A2, 150);
+	rudderCounts = smoothInput(A2, 2);
 	rudderDegrees = readRudderInput(rudderCounts,rudderCountsMap,rudderDegreesMap);
 	rudderRadians = rudderDegrees * (1 / 57.2957795);
-
-	delay(1);
 }
 
 //***************************************************************************
