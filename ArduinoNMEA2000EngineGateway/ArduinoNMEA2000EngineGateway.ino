@@ -159,15 +159,15 @@ void setup() {
 void loop()
 {
 	//Port trim (0-100%)
-	portTrimCounts = analogRead(A0);
+	portTrimCounts = smoothInput(A0, 50);
 	portTrimPct = readTrimInput(portTrimCounts, config.p_trim_min_counts, config.p_trim_max_counts);
 
 	//Stbd trim (0-100%)
-	stbdTrimCounts = analogRead(A1);
+	stbdTrimCounts = smoothInput(A1, 50);
 	stbdTrimPct = readTrimInput(stbdTrimCounts, config.s_trim_min_counts, config.s_trim_max_counts);
 
 	//Rudder (-45 to +45 degrees)
-	rudderCounts = analogRead(A2);
+	rudderCounts = smoothInput(A2, 50);
 	rudderDegrees = readRudderInput(rudderCounts,rudderCountsMap,rudderDegreesMap);
 	rudderRadians = rudderDegrees * (1 / 57.2957795);
 }
@@ -1071,6 +1071,16 @@ double multiMap(double val, double* _in, double* _out, uint8_t size)
 	// interpolate in the right segment for the rest
 	return (val - _in[pos - 1]) * (_out[pos] - _out[pos - 1]) / (_in[pos] - _in[pos - 1]) + _out[pos - 1];
 }
+
+int smoothInput(int input, int samples) {
+	int val = 0;
+	for (int i = 0; i < samples; i++) {
+		val = val + analogRead(input);
+		delay(1);
+	}
+	return (val / samples);
+}
+
 
 //***************************************************************************
 
